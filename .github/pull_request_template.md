@@ -1,22 +1,29 @@
-## Summary
-<!-- One sentence: what does this PR do? -->
+## What changed
 
-## Motivation
-<!-- Why is this change needed? Link to issue if applicable. -->
-Closes #
-
-## Changes
-<!-- Bullet list of what changed -->
 -
 
-## Test Results
-<!-- Paste output of: npm run test -->
+## Why
+
+<!-- Link to issue if applicable: Fixes #123 -->
+
+## How to test
+
+<!-- Steps for manual verification, or note "Covered by automated tests" -->
+
+1.
+
+## Test results
+
+<!-- Paste the passing test output summary, or a screenshot -->
+
 ```
-<paste here>
+<test output here>
 ```
 
 ## Checklist
-- [ ] Tests pass locally (`npm run test`)
-- [ ] Branch follows naming convention (`feat/`, `fix/`, `chore/`, etc.)
-- [ ] No `.env` files or secrets committed
-- [ ] PR description is complete
+
+- [ ] Local tests pass (`vitest run` for frontend, `pytest` for backend)
+- [ ] No secrets, API keys, or `.env` files are committed
+- [ ] Database migrations are included (if schema changed)
+- [ ] Types pass (`tsc --noEmit` for frontend, `mypy` for backend)
+- [ ] Linting passes (`eslint .` for frontend, `ruff check .` for backend)

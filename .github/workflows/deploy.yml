@@ -1,0 +1,101 @@
+name: Deploy to Production
+
+on:
+  push:
+    branches: [main]
+
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false  # Never cancel a running deploy
+
+jobs:
+  deploy:
+    name: "Deploy: Production (DigitalOcean Droplet)"
+    runs-on: ubuntu-latest
+    environment: production
+
+    steps:
+      - name: "step:checkout"
+        uses: actions/checkout@v4
+
+      - name: "step:deploy-via-ssh"
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.DO_HOST }}
+          username: ${{ secrets.DO_USER }}
+          key: ${{ secrets.DO_SSH_KEY }}
+          port: 22
+          command_timeout: 10m
+          script: |
+            set -euo pipefail
+
+            PROJECT_DIR="/opt/engoal_lite"
+            cd "$PROJECT_DIR"
+
+            echo "=== Pulling latest main ==="
+            git fetch origin main
+            git reset --hard origin/main
+
+            echo "=== Running database migrations ==="
+            cd backend
+            uv sync --frozen
+            uv run alembic upgrade head
+            cd ..
+
+            echo "=== Restarting backend (FastAPI) ==="
+            sudo systemctl restart engoal_lite-backend
+            sleep 3
+
+            echo "=== Verifying backend is up ==="
+            for i in 1 2 3 4 5; do
+              if curl -sf http://localhost:8000/api/health > /dev/null 2>&1; then
+                echo "Backend health check passed on attempt $i"
+                break
+              fi
+              if [ "$i" -eq 5 ]; then
+                echo "ERROR: Backend health check failed after 5 attempts"
+                sudo journalctl -u engoal_lite-backend --no-pager -n 50
+                exit 1
+              fi
+              echo "Backend not ready, retrying in 3s..."
+              sleep 3
+            done
+
+            echo "=== Building frontend (Next.js) ==="
+            cd frontend
+            npm ci
+            npx next build
+            cd ..
+
+            echo "=== Restarting frontend (Next.js) ==="
+            sudo systemctl restart engoal_lite-frontend
+            sleep 3
+
+            echo "=== Verifying frontend is up ==="
+            for i in 1 2 3 4 5; do
+              if curl -sf http://localhost:3000 > /dev/null 2>&1; then
+                echo "Frontend health check passed on attempt $i"
+                break
+              fi
+              if [ "$i" -eq 5 ]; then
+                echo "ERROR: Frontend health check failed after 5 attempts"
+                sudo journalctl -u engoal_lite-frontend --no-pager -n 50
+                exit 1
+              fi
+              echo "Frontend not ready, retrying in 3s..."
+              sleep 3
+            done
+
+            echo "=== Deploy complete ==="
+
+      - name: "step:smoke-test-health"
+        run: |
+          sleep 5
+          HTTP_STATUS=$(curl -sf -o /tmp/health.json -w "%{http_code}" https://${{ secrets.DO_HOST }}/api/health || true)
+          if [ "$HTTP_STATUS" != "200" ]; then
+            echo "ERROR: Production health check returned HTTP $HTTP_STATUS"
+            cat /tmp/health.json 2>/dev/null || echo "(no response body)"
+            exit 1
+          fi
+          echo "Production health check passed (HTTP 200)"
+          cat /tmp/health.json
