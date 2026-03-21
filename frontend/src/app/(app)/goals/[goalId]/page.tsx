@@ -139,10 +139,10 @@ export default function GoalDetailPage({ params }: GoalDetailPageProps): React.J
           <div className="mt-6">
             <div className="flex justify-between text-sm mb-1">
               <span className="text-gray-500">Progress</span>
-              <span className="font-medium">{goal.progress_pct.toFixed(1)}%</span>
+              <span className="font-medium">{(goal.progress_pct ?? 0).toFixed(1)}%</span>
             </div>
             <Progress
-              value={Math.min(100, goal.progress_pct)}
+              value={Math.min(100, goal.progress_pct ?? 0)}
               className="h-3"
               indicatorClassName={cn(
                 goal.rag_status === "green" ? "bg-green-500" :

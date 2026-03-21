@@ -28,6 +28,7 @@ export const goalSchema = z.object({
 });
 
 export const investmentSchema = z.object({
+  goal_id: z.string().uuid("Please select a goal"),
   name: z
     .string()
     .min(1, "Investment name is required")
@@ -44,14 +45,6 @@ export const investmentSchema = z.object({
     .number({ invalid_type_error: "Expected return must be a number" })
     .min(0, "Expected return cannot be negative")
     .max(100, "Expected return cannot exceed 100%"),
-  start_date: z
-    .string()
-    .min(1, "Start date is required")
-    .refine((d) => {
-      const date = new Date(d);
-      const today = new Date();
-      return date <= today;
-    }, "Start date cannot be in the future"),
   notes: z.string().max(1000, "Notes must be under 1000 characters").optional(),
 });
 

@@ -86,24 +86,24 @@ export default function InvestmentDetailPage({ params }: InvestmentDetailPagePro
         <Card>
           <CardContent className="pt-6">
             <p className="text-sm text-gray-500">Current Value</p>
-            <CurrencyDisplay amount={investment.latest_current_value} className="mt-1 text-xl font-bold" />
+            <CurrencyDisplay amount={investment.latest_current_value ?? 0} className="mt-1 text-xl font-bold" />
           </CardContent>
         </Card>
         <Card>
           <CardContent className="pt-6">
             <p className="text-sm text-gray-500">Total Invested</p>
-            <CurrencyDisplay amount={investment.latest_total_invested} className="mt-1 text-xl font-bold" />
+            <CurrencyDisplay amount={investment.latest_total_invested ?? 0} className="mt-1 text-xl font-bold" />
           </CardContent>
         </Card>
         <Card>
           <CardContent className="pt-6">
             <p className="text-sm text-gray-500">Gain / Loss</p>
-            <CurrencyDisplay amount={investment.unrealized_gain} showSign className="mt-1 text-xl font-bold" />
+            <CurrencyDisplay amount={investment.unrealized_gain ?? 0} showSign className="mt-1 text-xl font-bold" />
             <p className={cn(
               "text-sm",
-              investment.absolute_return_pct >= 0 ? "text-green-600" : "text-red-600",
+              (investment.absolute_return_pct ?? 0) >= 0 ? "text-green-600" : "text-red-600",
             )}>
-              {investment.absolute_return_pct >= 0 ? "+" : ""}{investment.absolute_return_pct.toFixed(2)}%
+              {(investment.absolute_return_pct ?? 0) >= 0 ? "+" : ""}{(investment.absolute_return_pct ?? 0).toFixed(2)}%
             </p>
           </CardContent>
         </Card>
@@ -114,7 +114,7 @@ export default function InvestmentDetailPage({ params }: InvestmentDetailPagePro
         <CardContent className="pt-6">
           <dl className="grid gap-4 sm:grid-cols-3 text-sm">
             <div><dt className="text-gray-500">Expected CAGR</dt><dd className="font-medium">{investment.expected_cagr}%</dd></div>
-            <div><dt className="text-gray-500">Start Date</dt><dd className="font-medium">{formatDate(investment.start_date)}</dd></div>
+            <div><dt className="text-gray-500">Created</dt><dd className="font-medium">{formatDate(investment.created_at)}</dd></div>
             <div><dt className="text-gray-500">Status</dt><dd className="font-medium">{investment.is_active ? "Active" : "Inactive"}</dd></div>
             {investment.notes && (
               <div className="sm:col-span-3"><dt className="text-gray-500">Notes</dt><dd className="font-medium">{investment.notes}</dd></div>
@@ -123,20 +123,15 @@ export default function InvestmentDetailPage({ params }: InvestmentDetailPagePro
         </CardContent>
       </Card>
 
-      {/* Linked goals */}
-      {investment.linked_goals.length > 0 && (
+      {/* Linked goal */}
+      {investment.goal_name && (
         <Card>
-          <CardHeader><CardTitle>Linked Goals</CardTitle></CardHeader>
+          <CardHeader><CardTitle>Linked Goal</CardTitle></CardHeader>
           <CardContent>
-            <div className="space-y-2">
-              {investment.linked_goals.map((lg) => (
-                <div key={lg.goal_id} className="flex items-center justify-between rounded-md bg-gray-50 px-3 py-2">
-                  <Link href={`/goals/${lg.goal_id}`} className="text-indigo-600 hover:underline text-sm font-medium">
-                    {lg.goal_name}
-                  </Link>
-                  <span className="text-sm text-gray-500">{lg.allocation_pct}% allocated</span>
-                </div>
-              ))}
+            <div className="flex items-center justify-between rounded-md bg-gray-50 px-3 py-2">
+              <Link href={`/goals/${investment.goal_id}`} className="text-indigo-600 hover:underline text-sm font-medium">
+                {investment.goal_name}
+              </Link>
             </div>
           </CardContent>
         </Card>
@@ -174,8 +169,8 @@ export default function InvestmentDetailPage({ params }: InvestmentDetailPagePro
                       <td className="px-3 py-2 text-right">
                         <CurrencyDisplay amount={entry.unrealized_gain} showSign className="text-sm" />
                       </td>
-                      <td className={cn("px-3 py-2 text-right text-sm", entry.absolute_return_pct >= 0 ? "text-green-600" : "text-red-600")}>
-                        {entry.absolute_return_pct >= 0 ? "+" : ""}{entry.absolute_return_pct.toFixed(2)}%
+                      <td className={cn("px-3 py-2 text-right text-sm", (entry.absolute_return_pct ?? 0) >= 0 ? "text-green-600" : "text-red-600")}>
+                        {(entry.absolute_return_pct ?? 0) >= 0 ? "+" : ""}{(entry.absolute_return_pct ?? 0).toFixed(2)}%
                       </td>
                       <td className="px-3 py-2 text-right text-gray-500">
                         {entry.month_over_month_value_change !== null

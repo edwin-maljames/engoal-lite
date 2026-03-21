@@ -66,7 +66,7 @@ export default function AllocationPage(): React.JSX.Element {
                         <td className="px-4 py-3 text-right">
                           <CurrencyDisplay amount={item.unrealized_gain} showSign className="text-sm" />
                         </td>
-                        <td className="px-4 py-3 text-right font-medium">{item.allocation_pct.toFixed(1)}%</td>
+                        <td className="px-4 py-3 text-right font-medium">{(item.allocation_pct ?? 0).toFixed(1)}%</td>
                       </tr>
                     ))}
                   </tbody>

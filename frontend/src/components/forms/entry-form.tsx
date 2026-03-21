@@ -73,8 +73,8 @@ export function EntryForm({ investmentId, investment }: EntryFormProps): React.J
 
           {investment && (
             <div className="rounded-md bg-gray-50 p-3 text-sm text-gray-600 space-y-1">
-              <p><strong>Previous Value:</strong> {investment.latest_current_value > 0 ? `₹${formatINR(investment.latest_current_value)}` : "—"}</p>
-              <p><strong>Previous Invested:</strong> {investment.latest_total_invested > 0 ? `₹${formatINR(investment.latest_total_invested)}` : "—"}</p>
+              <p><strong>Previous Value:</strong> {(investment.latest_current_value ?? 0) > 0 ? `₹${formatINR(investment.latest_current_value!)}` : "—"}</p>
+              <p><strong>Previous Invested:</strong> {(investment.latest_total_invested ?? 0) > 0 ? `₹${formatINR(investment.latest_total_invested!)}` : "—"}</p>
             </div>
           )}
 

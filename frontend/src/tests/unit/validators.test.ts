@@ -65,24 +65,24 @@ describe("goalSchema", () => {
 });
 
 describe("investmentSchema", () => {
-  const pastDate = "2023-01-01";
+  const validGoalId = "a1b2c3d4-e5f6-7890-abcd-ef1234567890";
 
   it("accepts valid investment with equity_mf", () => {
     const result = investmentSchema.safeParse({
+      goal_id: validGoalId,
       name: "Nifty 50 Index Fund",
       asset_class: "equity_mf",
       expected_cagr: 12,
-      start_date: pastDate,
     });
     expect(result.success).toBe(true);
   });
 
   it("accepts valid investment with smallcase", () => {
     const result = investmentSchema.safeParse({
+      goal_id: validGoalId,
       name: "Windmill Capital Smallcase",
       asset_class: "smallcase",
       expected_cagr: 16,
-      start_date: pastDate,
     });
     expect(result.success).toBe(true);
   });
@@ -91,10 +91,10 @@ describe("investmentSchema", () => {
     const assetClasses = ["equity_mf", "debt_mf", "fixed_deposit", "gold", "real_estate", "smallcase"];
     for (const ac of assetClasses) {
       const result = investmentSchema.safeParse({
+        goal_id: validGoalId,
         name: "Test",
         asset_class: ac,
         expected_cagr: 10,
-        start_date: pastDate,
       });
       expect(result.success, `Should accept ${ac}`).toBe(true);
     }
@@ -102,32 +102,39 @@ describe("investmentSchema", () => {
 
   it("rejects negative CAGR", () => {
     const result = investmentSchema.safeParse({
+      goal_id: validGoalId,
       name: "Fund",
       asset_class: "equity_mf",
       expected_cagr: -1,
-      start_date: pastDate,
     });
     expect(result.success).toBe(false);
   });
 
   it("rejects CAGR above 100", () => {
     const result = investmentSchema.safeParse({
+      goal_id: validGoalId,
       name: "Fund",
       asset_class: "equity_mf",
       expected_cagr: 101,
-      start_date: pastDate,
     });
     expect(result.success).toBe(false);
   });
 
-  it("rejects future start date", () => {
-    const tomorrow = new Date();
-    tomorrow.setDate(tomorrow.getDate() + 1);
+  it("rejects missing goal_id", () => {
     const result = investmentSchema.safeParse({
       name: "Fund",
       asset_class: "equity_mf",
       expected_cagr: 12,
-      start_date: tomorrow.toISOString().split("T")[0],
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it("rejects invalid goal_id", () => {
+    const result = investmentSchema.safeParse({
+      goal_id: "not-a-uuid",
+      name: "Fund",
+      asset_class: "equity_mf",
+      expected_cagr: 12,
     });
     expect(result.success).toBe(false);
   });
