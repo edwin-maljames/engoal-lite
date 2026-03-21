@@ -84,7 +84,7 @@ export function EntryForm({ investmentId, investment }: EntryFormProps): React.J
               id="total_invested"
               type="number"
               min={0}
-              step={1000}
+              step="any"
               placeholder="Cumulative total invested in this investment"
               {...register("total_invested", { valueAsNumber: true })}
             />
@@ -100,7 +100,7 @@ export function EntryForm({ investmentId, investment }: EntryFormProps): React.J
               id="current_value"
               type="number"
               min={0}
-              step={1000}
+              step="any"
               placeholder="Current market value of this investment"
               {...register("current_value", { valueAsNumber: true })}
             />
