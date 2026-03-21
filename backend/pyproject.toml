@@ -1,0 +1,81 @@
+[project]
+name = "engoal-lite-backend"
+version = "0.1.0"
+description = "Engoal-lite financial goal tracker — FastAPI backend"
+requires-python = ">=3.12"
+dependencies = [
+    "fastapi[standard]>=0.115.0",
+    "uvicorn[standard]>=0.32.0",
+    "sqlalchemy[asyncio]>=2.0.36",
+    "asyncpg>=0.30.0",
+    "alembic>=1.14.0",
+    "pydantic[email]>=2.10.0",
+    "pydantic-settings>=2.7.0",
+    "bcrypt>=4.0.0",
+    "python-jose[cryptography]>=3.3.0",
+    "slowapi>=0.1.9",
+    "python-multipart>=0.0.12",
+    "httpx>=0.28.0",
+    "aiosqlite>=0.22.1",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.3.0",
+    "anyio[asyncio]>=4.7.0",
+    "pytest-anyio>=0.0.0",
+    "pytest-cov>=6.0.0",
+    "ruff>=0.8.0",
+    "mypy>=1.13.0",
+]
+
+# ---------------------------------------------------------------------------
+# ruff — linter + formatter
+# ---------------------------------------------------------------------------
+[tool.ruff]
+target-version = "py312"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "N", "W", "UP", "S", "B", "A", "C4", "RET", "SIM", "TCH"]
+ignore = [
+    "E501",   # line-too-long (handled by formatter)
+    "S101",   # assert used in tests
+    "S104",   # possible binding to all interfaces
+    "S105",   # hardcoded password (false positives on test fixtures)
+    "S106",   # hardcoded password (false positives)
+    "B008",   # do not perform function calls in argument defaults (FastAPI pattern)
+    "RET504", # unnecessary assignment before return
+    "N818",   # Exception name should be named with Error suffix
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["S101", "S105", "S106", "S107", "S311"]
+"alembic/**" = ["INP001"]
+"app/models/**" = ["TC003"]  # stdlib types used in Mapped[] must be imported at runtime
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+line-ending = "lf"
+
+# ---------------------------------------------------------------------------
+# mypy — static type checker
+# ---------------------------------------------------------------------------
+[tool.mypy]
+python_version = "3.12"
+strict = true
+plugins = ["pydantic.mypy"]
+exclude = ["alembic/"]
+
+[[tool.mypy.overrides]]
+module = ["jose.*", "passlib.*", "slowapi.*"]
+ignore_missing_imports = true
+
+# ---------------------------------------------------------------------------
+# pytest
+# ---------------------------------------------------------------------------
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+addopts = "--tb=short -q"
