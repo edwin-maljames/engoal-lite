@@ -55,12 +55,14 @@ All must pass. Do not push if any fails.
 ### Integration tests (pytest)
 - Use `pytest-httpx` or `responses` to mock external HTTP calls
 - Never call real external APIs in tests — always mock them
-- Database tests use an in-memory SQLite or a test-scoped fixture
+- Database tests use SQLite in-memory (`sqlite:///:memory:`) via a test-scoped fixture — no Postgres needed locally
 
-### E2E tests (Playwright — CI only, if applicable)
+### E2E tests (Playwright — post-merge, local Mac + CI)
 - Only for projects with a web UI or API that serves a frontend
 - Live in `tests/e2e/`
-- CI handles these — do not block pushes on E2E locally
+- Run against **Postgres** (local Mac for manual runs, Docker via `docker-compose.test.yml` in CI)
+- Requires `backend/.env.test` with `DATABASE_URL=postgresql://test_user:test_pwd@localhost:5432/engoal_lite_test`
+- Do not block worktree pushes on E2E — these run after merge
 
 ---
 

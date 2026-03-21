@@ -12,7 +12,14 @@
 .env.staging
 *.env
 backend/.env
+backend/.env.test
 frontend/.env.local
+frontend/.env.test.local
+
+# SQLite dev databases (never commit)
+*.db
+*.sqlite
+*.sqlite3
 
 # -----------------------------------------------------------------------------
 # Python / Backend
