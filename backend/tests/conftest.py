@@ -96,6 +96,9 @@ async def app(db_session: AsyncSession) -> AsyncGenerator[Any, None]:
 
     _app = create_app()
 
+    # Disable rate limiting in tests to prevent cross-test interference
+    _app.state.limiter.enabled = False
+
     async def _override_get_db() -> AsyncGenerator[AsyncSession, None]:
         yield db_session
 

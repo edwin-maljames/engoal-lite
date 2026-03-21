@@ -1,9 +1,10 @@
 """Dashboard API — aggregated portfolio overview."""
 
+import uuid
 from decimal import Decimal
 
 from fastapi import APIRouter, Depends
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.deps import get_current_user, get_db
@@ -24,19 +25,32 @@ from app.services.rag import InvestmentInput, evaluate_goal
 router = APIRouter(prefix="/dashboard", tags=["dashboard"])
 
 
-async def _latest_entry_for_inv(investment_id: object, db: AsyncSession) -> MonthlyEntry | None:
-    import uuid as _uuid
+async def _batch_latest_entries(
+    investment_ids: list[uuid.UUID],
+    db: AsyncSession,
+) -> dict[uuid.UUID, MonthlyEntry]:
+    """Load the latest MonthlyEntry for each investment in a single query."""
+    if not investment_ids:
+        return {}
 
-    inv_id = (
-        investment_id if isinstance(investment_id, _uuid.UUID) else _uuid.UUID(str(investment_id))
+    latest_month = (
+        select(
+            MonthlyEntry.investment_id,
+            func.max(MonthlyEntry.entry_month).label("max_month"),
+        )
+        .where(MonthlyEntry.investment_id.in_(investment_ids))
+        .group_by(MonthlyEntry.investment_id)
+        .subquery()
     )
-    result = await db.execute(
-        select(MonthlyEntry)
-        .where(MonthlyEntry.investment_id == inv_id)
-        .order_by(MonthlyEntry.entry_month.desc())
-        .limit(1)
+
+    stmt = select(MonthlyEntry).join(
+        latest_month,
+        (MonthlyEntry.investment_id == latest_month.c.investment_id)
+        & (MonthlyEntry.entry_month == latest_month.c.max_month),
     )
-    return result.scalar_one_or_none()
+    result = await db.execute(stmt)
+    entries = result.scalars().all()
+    return {e.investment_id: e for e in entries}
 
 
 @router.get("", response_model=DashboardResponse)
@@ -46,25 +60,24 @@ async def get_dashboard(
 ) -> DashboardResponse:
     """Aggregated portfolio overview: summary, asset allocation, goals, recent entries."""
 
-    # Load all active investments for this user
-    inv_result = await db.execute(
-        select(Investment).where(
-            Investment.user_id == current_user.id,
-            Investment.is_active.is_(True),
-        )
+    # Load ALL investments for this user (both active and inactive, for recent entries)
+    all_inv_result = await db.execute(
+        select(Investment).where(Investment.user_id == current_user.id)
     )
-    investments = list(inv_result.scalars().all())
+    all_investments = list(all_inv_result.scalars().all())
+    all_inv_map = {inv.id: inv for inv in all_investments}
 
-    # Build a map: investment -> latest entry
-    latest_entries: dict[object, MonthlyEntry | None] = {}
-    for inv in investments:
-        latest_entries[inv.id] = await _latest_entry_for_inv(inv.id, db)
+    active_investments = [inv for inv in all_investments if inv.is_active]
 
-    # Portfolio summary
+    # Batch-load latest entries for all investments in one query
+    all_inv_ids = [inv.id for inv in all_investments]
+    latest_entries = await _batch_latest_entries(all_inv_ids, db)
+
+    # ── Portfolio summary ────────────────────────────────────────────────────
     total_invested = Decimal("0")
     total_current_value = Decimal("0")
 
-    for inv in investments:
+    for inv in active_investments:
         entry = latest_entries.get(inv.id)
         if entry:
             total_invested += entry.total_invested
@@ -77,9 +90,9 @@ async def get_dashboard(
             Decimal("0.01")
         )
 
-    # Asset allocation by class
+    # ── Asset allocation by class ────────────────────────────────────────────
     allocation_map: dict[str, Decimal] = {}
-    for inv in investments:
+    for inv in active_investments:
         entry = latest_entries.get(inv.id)
         if entry and entry.current_value > 0:
             cls = inv.asset_class.value
@@ -96,7 +109,7 @@ async def get_dashboard(
             AssetAllocationItem(asset_class=cls, current_value=cv, allocation_pct=pct)
         )
 
-    # Goals — active only
+    # ── Goals — active only ──────────────────────────────────────────────────
     goals_result = await db.execute(
         select(Goal).where(
             Goal.user_id == current_user.id,
@@ -105,22 +118,21 @@ async def get_dashboard(
     )
     active_goals = list(goals_result.scalars().all())
 
+    # Group active investments by goal (reuse already-loaded data)
+    invs_by_goal: dict[uuid.UUID, list[Investment]] = {}
+    for inv in active_investments:
+        invs_by_goal.setdefault(inv.goal_id, []).append(inv)
+
     dashboard_goals: list[DashboardGoalItem] = []
     goals_on_track = 0
     goals_at_risk = 0
 
     for goal in active_goals:
-        goal_invs_result = await db.execute(
-            select(Investment).where(
-                Investment.goal_id == goal.id,
-                Investment.is_active.is_(True),
-            )
-        )
-        goal_invs = list(goal_invs_result.scalars().all())
+        goal_invs = invs_by_goal.get(goal.id, [])
 
         inv_inputs: list[InvestmentInput] = []
         for inv in goal_invs:
-            entry = await _latest_entry_for_inv(inv.id, db)
+            entry = latest_entries.get(inv.id)
             if entry is None:
                 continue
             inv_inputs.append(
@@ -153,7 +165,7 @@ async def get_dashboard(
             )
         )
 
-    # Recent entries — last 10 across all investments
+    # ── Recent entries — last 10 across all investments ──────────────────────
     recent_result = await db.execute(
         select(MonthlyEntry)
         .join(Investment, MonthlyEntry.investment_id == Investment.id)
@@ -163,27 +175,28 @@ async def get_dashboard(
     )
     recent_raw = list(recent_result.scalars().all())
 
-    # Build investment + goal name lookup for recent entries
-    inv_map = {inv.id: inv for inv in investments}
+    # Batch-load goal names for recent entries
+    goal_ids_needed = list(
+        {all_inv_map[e.investment_id].goal_id for e in recent_raw if e.investment_id in all_inv_map}
+    )
+    goal_name_map: dict[uuid.UUID, str] = {}
+    if goal_ids_needed:
+        goal_name_result = await db.execute(
+            select(Goal.id, Goal.name).where(Goal.id.in_(goal_ids_needed))
+        )
+        goal_name_map = {row.id: row.name for row in goal_name_result}
 
     recent_entries: list[RecentEntryItem] = []
     for entry in recent_raw:
-        recent_inv: Investment | None = inv_map.get(entry.investment_id)
-        if recent_inv is None:
-            # Investment might be inactive; load it
-            inv_r = await db.execute(select(Investment).where(Investment.id == entry.investment_id))
-            recent_inv = inv_r.scalar_one_or_none()
+        recent_inv = all_inv_map.get(entry.investment_id)
         if recent_inv is None:
             continue
-
-        goal_r = await db.execute(select(Goal).where(Goal.id == recent_inv.goal_id))
-        recent_goal: Goal | None = goal_r.scalar_one_or_none()
 
         recent_entries.append(
             RecentEntryItem(
                 investment_id=entry.investment_id,
                 investment_name=recent_inv.name,
-                goal_name=recent_goal.name if recent_goal else "—",
+                goal_name=goal_name_map.get(recent_inv.goal_id, "\u2014"),
                 entry_month=entry.entry_month,
                 current_value=entry.current_value,
                 total_invested=entry.total_invested,

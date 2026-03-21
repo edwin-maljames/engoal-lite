@@ -29,7 +29,7 @@ export const handlers = [
       });
     }
     return HttpResponse.json(
-      { detail: { code: "INVALID_CREDENTIALS", message: "Invalid email or password." } },
+      { data: null, error: { code: "INVALID_CREDENTIALS", message: "Invalid email or password." } },
       { status: 401 },
     );
   }),
@@ -92,7 +92,7 @@ export const handlers = [
     const goal = goals.find((g) => g.id === params.goalId);
     if (!goal) {
       return HttpResponse.json(
-        { detail: { code: "RESOURCE_NOT_FOUND", message: "Goal not found." } },
+        { data: null, error: { code: "RESOURCE_NOT_FOUND", message: "Goal not found." } },
         { status: 404 },
       );
     }
@@ -104,7 +104,7 @@ export const handlers = [
     const idx = goals.findIndex((g) => g.id === params.goalId);
     if (idx === -1) {
       return HttpResponse.json(
-        { detail: { code: "RESOURCE_NOT_FOUND", message: "Goal not found." } },
+        { data: null, error: { code: "RESOURCE_NOT_FOUND", message: "Goal not found." } },
         { status: 404 },
       );
     }
@@ -124,7 +124,7 @@ export const handlers = [
     const goal = goals.find((g) => g.id === params.goalId);
     if (!goal) {
       return HttpResponse.json(
-        { detail: { code: "RESOURCE_NOT_FOUND", message: "Goal not found." } },
+        { data: null, error: { code: "RESOURCE_NOT_FOUND", message: "Goal not found." } },
         { status: 404 },
       );
     }
@@ -203,7 +203,7 @@ export const handlers = [
     const inv = investments.find((i) => i.id === params.investmentId);
     if (!inv) {
       return HttpResponse.json(
-        { detail: { code: "RESOURCE_NOT_FOUND", message: "Investment not found." } },
+        { data: null, error: { code: "RESOURCE_NOT_FOUND", message: "Investment not found." } },
         { status: 404 },
       );
     }
@@ -215,7 +215,7 @@ export const handlers = [
     const idx = investments.findIndex((i) => i.id === params.investmentId);
     if (idx === -1) {
       return HttpResponse.json(
-        { detail: { code: "RESOURCE_NOT_FOUND", message: "Investment not found." } },
+        { data: null, error: { code: "RESOURCE_NOT_FOUND", message: "Investment not found." } },
         { status: 404 },
       );
     }
