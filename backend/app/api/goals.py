@@ -4,7 +4,7 @@ import uuid
 from decimal import Decimal
 
 from fastapi import APIRouter, Depends, Query
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -51,28 +51,46 @@ async def _get_goal_or_404(
     return goal
 
 
-async def _latest_entry_for_investment(
-    investment_id: uuid.UUID, db: AsyncSession
-) -> MonthlyEntry | None:
-    result = await db.execute(
-        select(MonthlyEntry)
-        .where(MonthlyEntry.investment_id == investment_id)
-        .order_by(MonthlyEntry.entry_month.desc())
-        .limit(1)
-    )
-    return result.scalar_one_or_none()
-
-
-async def _build_investment_inputs(
-    investments: list[Investment],
+async def _batch_latest_entries(
+    investment_ids: list[uuid.UUID],
     db: AsyncSession,
+) -> dict[uuid.UUID, MonthlyEntry]:
+    """Load the latest MonthlyEntry for each investment in a single query."""
+    if not investment_ids:
+        return {}
+
+    # Subquery: max entry_month per investment
+    latest_month = (
+        select(
+            MonthlyEntry.investment_id,
+            func.max(MonthlyEntry.entry_month).label("max_month"),
+        )
+        .where(MonthlyEntry.investment_id.in_(investment_ids))
+        .group_by(MonthlyEntry.investment_id)
+        .subquery()
+    )
+
+    # Join back to get full entry rows
+    stmt = select(MonthlyEntry).join(
+        latest_month,
+        (MonthlyEntry.investment_id == latest_month.c.investment_id)
+        & (MonthlyEntry.entry_month == latest_month.c.max_month),
+    )
+    result = await db.execute(stmt)
+    entries = result.scalars().all()
+    return {e.investment_id: e for e in entries}
+
+
+def _build_investment_inputs(
+    investments: list[Investment],
+    latest_entries: dict[uuid.UUID, MonthlyEntry],
 ) -> list[InvestmentInput]:
-    """Return InvestmentInput list using each investment's latest monthly entry value."""
+    """Build InvestmentInput list from pre-loaded latest entries."""
     inputs: list[InvestmentInput] = []
     for inv in investments:
         if not inv.is_active:
             continue
-        entry = await _latest_entry_for_investment(inv.id, db)
+        entry = latest_entries.get(inv.id)
         if entry is None:
             continue
         inputs.append(
@@ -89,20 +107,21 @@ async def _build_investment_inputs(
 
 async def _build_goal_response(goal: Goal, db: AsyncSession) -> GoalResponse:
     """Compute derived fields and build the GoalResponse."""
-    # Load investments
     investments_result = await db.execute(select(Investment).where(Investment.goal_id == goal.id))
     investments = list(investments_result.scalars().all())
 
+    inv_ids = [inv.id for inv in investments]
+    latest_entries = await _batch_latest_entries(inv_ids, db)
+
     total_invested = Decimal("0")
     total_current_value = Decimal("0")
-
     for inv in investments:
-        entry = await _latest_entry_for_investment(inv.id, db)
+        entry = latest_entries.get(inv.id)
         if entry:
             total_invested += entry.total_invested
             total_current_value += entry.current_value
 
-    inv_inputs = await _build_investment_inputs(investments, db)
+    inv_inputs = _build_investment_inputs(investments, latest_entries)
     result = evaluate_goal(goal.target_amount, goal.target_date, inv_inputs)
 
     return GoalResponse(
@@ -144,7 +163,59 @@ async def list_goals(
     result = await db.execute(stmt)
     goals = list(result.scalars().all())
 
-    responses = [await _build_goal_response(g, db) for g in goals]
+    # Batch-load all investments for this user's goals in one query
+    goal_ids = [g.id for g in goals]
+    if goal_ids:
+        inv_result = await db.execute(select(Investment).where(Investment.goal_id.in_(goal_ids)))
+        all_investments = list(inv_result.scalars().all())
+    else:
+        all_investments = []
+
+    # Batch-load latest entries for all investments
+    all_inv_ids = [inv.id for inv in all_investments]
+    latest_entries = await _batch_latest_entries(all_inv_ids, db)
+
+    # Group investments by goal
+    invs_by_goal: dict[uuid.UUID, list[Investment]] = {}
+    for inv in all_investments:
+        invs_by_goal.setdefault(inv.goal_id, []).append(inv)
+
+    # Build responses without additional queries
+    responses: list[GoalResponse] = []
+    for goal in goals:
+        investments = invs_by_goal.get(goal.id, [])
+
+        total_invested = Decimal("0")
+        total_current_value = Decimal("0")
+        for inv in investments:
+            entry = latest_entries.get(inv.id)
+            if entry:
+                total_invested += entry.total_invested
+                total_current_value += entry.current_value
+
+        inv_inputs = _build_investment_inputs(investments, latest_entries)
+        eval_result = evaluate_goal(goal.target_amount, goal.target_date, inv_inputs)
+
+        responses.append(
+            GoalResponse(
+                id=goal.id,
+                name=goal.name,
+                description=goal.description,
+                target_amount=goal.target_amount,
+                target_amount_formatted=format_inr(goal.target_amount),
+                target_date=goal.target_date,
+                status=goal.status,
+                total_invested=total_invested,
+                total_current_value=total_current_value,
+                total_projected_value=eval_result["total_projected"],
+                progress_pct=eval_result["progress_pct"],
+                rag_status=eval_result["rag_status"].value,
+                investment_count=len(investments),
+                created_at=goal.created_at,
+                updated_at=goal.updated_at,
+            )
+        )
+
     return GoalListResponse(goals=responses, count=len(responses))
 
 
@@ -227,7 +298,9 @@ async def get_goal_projection(
 
     investments_result = await db.execute(select(Investment).where(Investment.goal_id == goal.id))
     investments = list(investments_result.scalars().all())
-    inv_inputs = await _build_investment_inputs(investments, db)
+    inv_ids = [inv.id for inv in investments]
+    latest_entries = await _batch_latest_entries(inv_ids, db)
+    inv_inputs = _build_investment_inputs(investments, latest_entries)
 
     result = evaluate_goal(goal.target_amount, goal.target_date, inv_inputs)
 
@@ -272,7 +345,9 @@ async def get_goal_rag_status(
 
     investments_result = await db.execute(select(Investment).where(Investment.goal_id == goal.id))
     investments = list(investments_result.scalars().all())
-    inv_inputs = await _build_investment_inputs(investments, db)
+    inv_ids = [inv.id for inv in investments]
+    latest_entries = await _batch_latest_entries(inv_ids, db)
+    inv_inputs = _build_investment_inputs(investments, latest_entries)
 
     result = evaluate_goal(goal.target_amount, goal.target_date, inv_inputs)
     shortfall = result["shortfall"]

@@ -3,7 +3,7 @@
 import uuid
 from datetime import datetime
 
-from pydantic import BaseModel, EmailStr, field_validator, model_validator
+from pydantic import BaseModel, EmailStr, Field, field_validator, model_validator
 
 from app.core.security import validate_password_policy
 
@@ -53,6 +53,17 @@ class SetupRequest(BaseModel):
         if self.password != self.confirm_password:
             raise ValueError("Passwords do not match.")
         return self
+
+
+class UpdateMeRequest(BaseModel):
+    """Update the authenticated user's profile."""
+
+    full_name: str = Field(..., min_length=1, max_length=100)
+
+    @field_validator("full_name")
+    @classmethod
+    def strip_full_name(cls, v: str) -> str:
+        return v.strip()
 
 
 # ---------------------------------------------------------------------------

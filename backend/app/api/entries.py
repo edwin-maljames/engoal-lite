@@ -1,6 +1,7 @@
 """Monthly entries API — upsert and history for each investment."""
 
 import uuid
+from datetime import date as _date
 from decimal import Decimal
 
 from fastapi import APIRouter, Depends, Query
@@ -9,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.deps import get_current_user, get_db
 from app.core.exceptions import NotFoundException
+from app.models.goal import Goal
 from app.models.investment import Investment
 from app.models.monthly_entry import MonthlyEntry
 from app.models.user import User
@@ -42,17 +44,13 @@ async def _get_investment_for_user(
 
 async def _compute_goal_rag(inv: Investment, db: AsyncSession) -> str:
     """Recalculate the RAG status for the goal linked to this investment."""
-    from sqlalchemy import select as _select
-
-    from app.models.goal import Goal
-
-    goal_result = await db.execute(_select(Goal).where(Goal.id == inv.goal_id))
+    goal_result = await db.execute(select(Goal).where(Goal.id == inv.goal_id))
     goal = goal_result.scalar_one_or_none()
     if goal is None:
         return "red"
 
     siblings_result = await db.execute(
-        _select(Investment).where(
+        select(Investment).where(
             Investment.goal_id == goal.id,
             Investment.is_active.is_(True),
         )
@@ -62,7 +60,7 @@ async def _compute_goal_rag(inv: Investment, db: AsyncSession) -> str:
     inv_inputs: list[InvestmentInput] = []
     for s in siblings:
         entry_result = await db.execute(
-            _select(MonthlyEntry)
+            select(MonthlyEntry)
             .where(MonthlyEntry.investment_id == s.id)
             .order_by(MonthlyEntry.entry_month.desc())
             .limit(1)
@@ -202,12 +200,8 @@ async def list_entries(
         .limit(limit)
     )
     if from_month:
-        from datetime import date as _date
-
         stmt = stmt.where(MonthlyEntry.entry_month >= _date.fromisoformat(from_month))
     if to_month:
-        from datetime import date as _date
-
         stmt = stmt.where(MonthlyEntry.entry_month <= _date.fromisoformat(to_month))
 
     result = await db.execute(stmt)

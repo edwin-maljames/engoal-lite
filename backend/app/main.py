@@ -5,14 +5,14 @@ import logging.config
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
-from slowapi.util import get_remote_address
 
 from app.api import auth, dashboard, entries, goals, health, investments
 from app.core.config import settings
 from app.core.exceptions import register_exception_handlers
 from app.core.middleware import SecurityHeadersMiddleware
+from app.core.rate_limit import limiter
 
 # ---------------------------------------------------------------------------
 # Logging
@@ -22,12 +22,6 @@ logging.basicConfig(
     level=logging.DEBUG if settings.DEBUG else logging.INFO,
     format="%(asctime)s %(levelname)s %(name)s: %(message)s",
 )
-
-# ---------------------------------------------------------------------------
-# Rate limiter (shared instance)
-# ---------------------------------------------------------------------------
-
-limiter = Limiter(key_func=get_remote_address, default_limits=["120/minute"])
 
 
 def create_app() -> FastAPI:

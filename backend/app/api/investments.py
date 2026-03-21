@@ -4,7 +4,7 @@ import uuid
 from decimal import Decimal
 
 from fastapi import APIRouter, Depends, Query
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.deps import get_current_user, get_db
@@ -45,25 +45,40 @@ async def _get_investment_or_404(
     return inv
 
 
-async def _latest_entry(investment_id: uuid.UUID, db: AsyncSession) -> MonthlyEntry | None:
-    result = await db.execute(
-        select(MonthlyEntry)
-        .where(MonthlyEntry.investment_id == investment_id)
-        .order_by(MonthlyEntry.entry_month.desc())
-        .limit(1)
+async def _batch_latest_entries(
+    investment_ids: list[uuid.UUID],
+    db: AsyncSession,
+) -> dict[uuid.UUID, MonthlyEntry]:
+    """Load the latest MonthlyEntry for each investment in a single query."""
+    if not investment_ids:
+        return {}
+
+    latest_month = (
+        select(
+            MonthlyEntry.investment_id,
+            func.max(MonthlyEntry.entry_month).label("max_month"),
+        )
+        .where(MonthlyEntry.investment_id.in_(investment_ids))
+        .group_by(MonthlyEntry.investment_id)
+        .subquery()
     )
-    return result.scalar_one_or_none()
+
+    stmt = select(MonthlyEntry).join(
+        latest_month,
+        (MonthlyEntry.investment_id == latest_month.c.investment_id)
+        & (MonthlyEntry.entry_month == latest_month.c.max_month),
+    )
+    result = await db.execute(stmt)
+    entries = result.scalars().all()
+    return {e.investment_id: e for e in entries}
 
 
-async def _build_investment_response(inv: Investment, db: AsyncSession) -> InvestmentResponse:
-    """Build InvestmentResponse with computed fields from latest entry."""
-    # Load related goal name
-    goal_result = await db.execute(select(Goal).where(Goal.id == inv.goal_id))
-    goal = goal_result.scalar_one_or_none()
-    goal_name = goal.name if goal else "—"
-
-    entry = await _latest_entry(inv.id, db)
-
+def _build_investment_response(
+    inv: Investment,
+    goal_name: str,
+    entry: MonthlyEntry | None,
+) -> InvestmentResponse:
+    """Build InvestmentResponse from pre-loaded data (no extra queries)."""
     latest_total_invested: Decimal | None = None
     latest_current_value: Decimal | None = None
     unrealized_gain: Decimal | None = None
@@ -123,7 +138,25 @@ async def list_investments(
     result = await db.execute(stmt)
     investments = list(result.scalars().all())
 
-    responses = [await _build_investment_response(inv, db) for inv in investments]
+    # Batch-load goal names
+    goal_ids = list({inv.goal_id for inv in investments})
+    goal_name_map: dict[uuid.UUID, str] = {}
+    if goal_ids:
+        goal_result = await db.execute(select(Goal.id, Goal.name).where(Goal.id.in_(goal_ids)))
+        goal_name_map = {row.id: row.name for row in goal_result}
+
+    # Batch-load latest entries
+    inv_ids = [inv.id for inv in investments]
+    latest_entries = await _batch_latest_entries(inv_ids, db)
+
+    responses = [
+        _build_investment_response(
+            inv,
+            goal_name=goal_name_map.get(inv.goal_id, "\u2014"),
+            entry=latest_entries.get(inv.id),
+        )
+        for inv in investments
+    ]
     return InvestmentListResponse(investments=responses, count=len(responses))
 
 
@@ -134,11 +167,11 @@ async def create_investment(
     current_user: User = Depends(get_current_user),
 ) -> InvestmentResponse:
     """Create a new investment linked to a goal."""
-    # Verify the goal belongs to the current user
     goal_result = await db.execute(
         select(Goal).where(Goal.id == body.goal_id, Goal.user_id == current_user.id)
     )
-    if goal_result.scalar_one_or_none() is None:
+    goal = goal_result.scalar_one_or_none()
+    if goal is None:
         raise NotFoundException("Goal", str(body.goal_id))
 
     inv = Investment(
@@ -152,7 +185,7 @@ async def create_investment(
     )
     db.add(inv)
     await db.flush()
-    return await _build_investment_response(inv, db)
+    return _build_investment_response(inv, goal_name=goal.name, entry=None)
 
 
 @router.get("/{investment_id}", response_model=InvestmentResponse)
@@ -163,7 +196,12 @@ async def get_investment(
 ) -> InvestmentResponse:
     """Get a single investment with computed fields."""
     inv = await _get_investment_or_404(investment_id, current_user, db)
-    return await _build_investment_response(inv, db)
+
+    goal_result = await db.execute(select(Goal.name).where(Goal.id == inv.goal_id))
+    goal_name = goal_result.scalar_one_or_none() or "\u2014"
+
+    latest_entries = await _batch_latest_entries([inv.id], db)
+    return _build_investment_response(inv, goal_name=goal_name, entry=latest_entries.get(inv.id))
 
 
 @router.put("/{investment_id}", response_model=InvestmentResponse)
@@ -187,7 +225,12 @@ async def update_investment(
 
     await db.flush()
     await db.refresh(inv)
-    return await _build_investment_response(inv, db)
+
+    goal_result = await db.execute(select(Goal.name).where(Goal.id == inv.goal_id))
+    goal_name = goal_result.scalar_one_or_none() or "\u2014"
+
+    latest_entries = await _batch_latest_entries([inv.id], db)
+    return _build_investment_response(inv, goal_name=goal_name, entry=latest_entries.get(inv.id))
 
 
 @router.delete("/{investment_id}", status_code=204)

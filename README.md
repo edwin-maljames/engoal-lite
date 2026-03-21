@@ -8,7 +8,7 @@ Personal Financial Planning App — built on the Alteeza Lab agentic stack.
 |-------|------|
 | Frontend | Next.js (App Router) · TypeScript · Tailwind CSS |
 | Backend | FastAPI · Python 3.12 · SQLAlchemy · Alembic |
-| Database | PostgreSQL 16 |
+| Database | SQLite (dev) · PostgreSQL 16 (E2E / CI / prod) |
 | Package managers | npm (frontend) · uv (backend) |
 | Tests | Vitest + Playwright (frontend) · pytest (backend) |
 | Deployment | DigitalOcean Droplet · systemd · Nginx |
@@ -59,12 +59,13 @@ cp frontend/.env.local.example frontend/.env.local
 ```
 
 Required variables:
+Required variables:
 
-| Variable | Location | Purpose |
-|----------|----------|---------|
-| `DATABASE_URL` | `backend/.env` | PostgreSQL connection string |
-| `SECRET_KEY` | `backend/.env` | JWT signing secret |
-| `NEXT_PUBLIC_API_URL` | `frontend/.env.local` | Backend API base URL |
+| Variable | Location | Dev default |
+|----------|----------|-------------|
+| `DATABASE_URL` | `backend/.env` | `sqlite+aiosqlite:///./engoal_lite_dev.db` |
+| `SECRET_KEY` | `backend/.env` | Generate with `openssl rand -hex 32` |
+| `NEXT_PUBLIC_API_URL` | `frontend/.env.local` | `http://localhost:8000/api` |
 
 Dev `DATABASE_URL` format:
 
@@ -79,12 +80,30 @@ DATABASE_URL=postgresql+asyncpg://<your-mac-username>@localhost:5432/engoal_lite
 cd backend
 uv sync
 uv run alembic upgrade head        # creates all tables on first run
+uv run alembic upgrade head        # creates all tables on first run
 uv run uvicorn app.main:app --reload --port 8000
 
+# Terminal 2 — Frontend
 # Terminal 2 — Frontend
 cd frontend
 npm install
 npm run dev
+```
+
+- Backend: http://localhost:8000
+- Frontend: http://localhost:3000
+- API docs: http://localhost:8000/api/docs
+
+> Dev uses **SQLite** — no Docker or Postgres setup needed. The `.db` file is gitignored.
+
+### 4. One-time Postgres setup (E2E tests only)
+
+Only needed if you want to run E2E tests locally:
+
+```bash
+createuser -s test_user
+psql -c "ALTER USER test_user WITH PASSWORD 'test_pwd';"
+createdb -O test_user engoal_lite_test
 ```
 
 - Backend: http://localhost:8000
@@ -111,7 +130,7 @@ uv run ruff check .
 uv run mypy app/
 ```
 
-**Before every push, all three must pass:**
+**Before every push, all must pass:**
 
 ```bash
 uv run ruff format . && uv run ruff check . && uv run mypy app/ && uv run pytest tests/
@@ -130,11 +149,11 @@ npx vitest run        # single run (CI equivalent)
 npm run lint
 npx tsc --noEmit
 
-# E2E tests (Playwright — requires a running backend)
+# E2E tests (Playwright — requires a running backend + Postgres)
 npm run test:e2e
 ```
 
-**Before every push, all three must pass:**
+**Before every push, all must pass:**
 
 ```bash
 npm run lint && npm run build && npx vitest run
@@ -149,6 +168,7 @@ npm run lint && npm run build && npx vitest run
 | Workflow | Trigger | What it does |
 |----------|---------|--------------|
 | `ci-frontend.yml` | PR to `main` (frontend changes) | ESLint · tsc · Vitest · next build · Playwright |
+| `ci-backend.yml` | PR to `main` (backend changes) | ruff · mypy · pytest (with Postgres service via Docker) |
 | `ci-backend.yml` | PR to `main` (backend changes) | ruff · mypy · pytest (with Postgres service via Docker) |
 | `deploy.yml` | Push to `main` | SSH deploy to DigitalOcean Droplet |
 
@@ -176,6 +196,7 @@ On every merge to `main`, the deploy workflow:
 ### Health endpoint
 
 `GET /api/v1/health` — returns `200 OK` with version info. Used by deploy workflow to verify the stack is up after each deploy.
+`GET /api/v1/health` — returns `200 OK` with version info. Used by deploy workflow to verify the stack is up after each deploy.
 
 ---
 
@@ -197,8 +218,7 @@ Engoal-lite/
 │   └── uv.lock
 ├── frontend/              # Next.js application
 │   ├── src/
-│   ├── tests/
-│   ├── e2e/
+│   │   └── tests/         # Vitest unit + integration tests
 │   └── package.json
 ├── docker-compose.test.yml    # Test database for CI (port 5433)
 ├── .gitignore
