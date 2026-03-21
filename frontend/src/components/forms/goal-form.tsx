@@ -91,7 +91,7 @@ export function GoalForm({ goal, goalId }: GoalFormProps): React.JSX.Element {
                 id="target_amount"
                 type="number"
                 min={1}
-                step={1000}
+                step="any"
                 placeholder="e.g., 5000000"
                 {...register("target_amount", { valueAsNumber: true })}
               />
