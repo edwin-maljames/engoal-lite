@@ -121,15 +121,15 @@ def register_exception_handlers(app: FastAPI) -> None:
 
     @app.exception_handler(AppException)
     async def app_exception_handler(request: Request, exc: AppException) -> JSONResponse:
+        error_body: dict[str, object] = {
+            "code": exc.code,
+            "message": exc.message,
+        }
+        if exc.field is not None:
+            error_body["field"] = exc.field
         return JSONResponse(
             status_code=exc.status_code,
-            content={
-                "detail": {
-                    "code": exc.code,
-                    "message": exc.message,
-                    "field": exc.field,
-                }
-            },
+            content={"data": None, "error": error_body},
         )
 
     @app.exception_handler(Exception)
@@ -138,10 +138,10 @@ def register_exception_handlers(app: FastAPI) -> None:
         return JSONResponse(
             status_code=HTTP_500_INTERNAL_SERVER_ERROR,
             content={
-                "detail": {
+                "data": None,
+                "error": {
                     "code": "INTERNAL_ERROR",
                     "message": "An unexpected error occurred.",
-                    "field": None,
-                }
+                },
             },
         )

@@ -61,11 +61,11 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
 
   if (!response.ok) {
     const errorBody = await response.json().catch(() => ({})) as {
-      detail?: { code?: string; message?: string };
+      error?: { code?: string; message?: string };
     };
     const message =
-      errorBody.detail?.message || `Request failed with status ${response.status}`;
-    const code = errorBody.detail?.code;
+      errorBody.error?.message || `Request failed with status ${response.status}`;
+    const code = errorBody.error?.code;
     throw new ApiError(response.status, message, code);
   }
 

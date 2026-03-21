@@ -8,7 +8,7 @@ Personal Financial Planning App — built on the Alteeza Lab agentic stack.
 |-------|------|
 | Frontend | Next.js (App Router) · TypeScript · Tailwind CSS |
 | Backend | FastAPI · Python 3.12 · SQLAlchemy · Alembic |
-| Database | PostgreSQL 16 |
+| Database | SQLite (dev) · PostgreSQL 16 (E2E / CI / prod) |
 | Package managers | npm (frontend) · uv (backend) |
 | Tests | Vitest + Playwright (frontend) · pytest (backend) |
 | Deployment | DigitalOcean Droplet · systemd · Nginx |
@@ -19,9 +19,9 @@ Personal Financial Planning App — built on the Alteeza Lab agentic stack.
 
 ### Prerequisites
 
-- Docker and Docker Compose
-- Node.js 24+ (for frontend work outside Docker)
-- Python 3.12+ and [uv](https://docs.astral.sh/uv/) (for backend work outside Docker)
+- **Python 3.12+** and [uv](https://docs.astral.sh/uv/)
+- **Node.js 24+**
+- **PostgreSQL 16+** — only needed for E2E tests (not required for dev or unit/integration tests)
 
 ### 1. Clone the repository
 
@@ -35,52 +35,49 @@ cd Engoal-lite
 ```bash
 # Backend
 cp backend/.env.example backend/.env
-# Edit backend/.env with your local values
+# Edit backend/.env — set SECRET_KEY (DATABASE_URL defaults to SQLite)
 
 # Frontend
-cp frontend/.env.example frontend/.env.local
-# Edit frontend/.env.local with your local values
+cp frontend/.env.local.example frontend/.env.local
 ```
 
-Required variables — see `.env.example` files at each layer for full list:
+Required variables:
 
-| Variable | Location | Purpose |
-|----------|----------|---------|
-| `DATABASE_URL` | `backend/.env` | PostgreSQL connection string |
-| `SECRET_KEY` | `backend/.env` | JWT signing secret |
-| `NEXT_PUBLIC_API_URL` | `frontend/.env.local` | Backend API base URL |
+| Variable | Location | Dev default |
+|----------|----------|-------------|
+| `DATABASE_URL` | `backend/.env` | `sqlite+aiosqlite:///./engoal_lite_dev.db` |
+| `SECRET_KEY` | `backend/.env` | Generate with `openssl rand -hex 32` |
+| `NEXT_PUBLIC_API_URL` | `frontend/.env.local` | `http://localhost:8000/api` |
 
-### 3. Start with Docker Compose (recommended)
-
-```bash
-docker compose up
-```
-
-This starts:
-- **PostgreSQL 16** on `localhost:5432`
-- **FastAPI backend** on `localhost:8000`
-- **Next.js frontend** on `localhost:3000`
-
-The backend runs with `--reload` and the frontend volume-mounts source for hot reload.
-
-### 4. Start manually (alternative)
-
-If you prefer running services outside Docker:
+### 3. Start the application
 
 ```bash
-# Terminal 1 — Start the test/dev database
-docker compose -f docker-compose.test.yml up
-
-# Terminal 2 — Backend
+# Terminal 1 — Backend
 cd backend
 uv sync
-uv run alembic upgrade head
+uv run alembic upgrade head        # creates all tables on first run
 uv run uvicorn app.main:app --reload --port 8000
 
-# Terminal 3 — Frontend
+# Terminal 2 — Frontend
 cd frontend
 npm install
 npm run dev
+```
+
+- Backend: http://localhost:8000
+- Frontend: http://localhost:3000
+- API docs: http://localhost:8000/api/docs
+
+> Dev uses **SQLite** — no Docker or Postgres setup needed. The `.db` file is gitignored.
+
+### 4. One-time Postgres setup (E2E tests only)
+
+Only needed if you want to run E2E tests locally:
+
+```bash
+createuser -s test_user
+psql -c "ALTER USER test_user WITH PASSWORD 'test_pwd';"
+createdb -O test_user engoal_lite_test
 ```
 
 ---
@@ -89,22 +86,20 @@ npm run dev
 
 ### Backend
 
+Unit and integration tests run against **SQLite in-memory** (no database setup needed):
+
 ```bash
 cd backend
 
-# Start the test database (port 5433 — separate from dev DB)
-docker compose -f ../docker-compose.test.yml up -d
-
 # Run the full suite
-DATABASE_URL=postgresql://engoal_lite_test:test_password@localhost:5433/engoal_lite_test \
-  uv run pytest tests/ -v --tb=short --cov=app --cov-report=term-missing
+uv run pytest tests/ -v --tb=short --cov=app --cov-report=term-missing
 
 # Lint and type-check
 uv run ruff check .
 uv run mypy app/
 ```
 
-**Before every push, all three must pass:**
+**Before every push, all must pass:**
 
 ```bash
 uv run ruff format . && uv run ruff check . && uv run mypy app/ && uv run pytest tests/
@@ -123,11 +118,11 @@ npx vitest run        # single run (CI equivalent)
 npm run lint
 npx tsc --noEmit
 
-# E2E tests (Playwright — requires a running backend)
+# E2E tests (Playwright — requires a running backend + Postgres)
 npm run test:e2e
 ```
 
-**Before every push, all three must pass:**
+**Before every push, all must pass:**
 
 ```bash
 npm run lint && npm run build && npx vitest run
@@ -142,8 +137,11 @@ npm run lint && npm run build && npx vitest run
 | Workflow | Trigger | What it does |
 |----------|---------|--------------|
 | `ci-frontend.yml` | PR to `main` (frontend changes) | ESLint · tsc · Vitest · next build · Playwright |
-| `ci-backend.yml` | PR to `main` (backend changes) | ruff · mypy · pytest (with Postgres service) |
+| `ci-backend.yml` | PR to `main` (backend changes) | ruff · mypy · pytest (with Postgres service via Docker) |
 | `deploy.yml` | Push to `main` | SSH deploy to DigitalOcean Droplet |
+
+> CI uses `docker-compose.test.yml` to spin up a Postgres test database on port 5433.
+> Locally, unit/integration tests use SQLite in-memory instead.
 
 ### Deploy flow
 
@@ -165,7 +163,7 @@ On every merge to `main`, the deploy workflow:
 
 ### Health endpoint
 
-`GET /api/health` — returns `200 OK` with DB status. Used by deploy workflow to verify the stack is up after each deploy.
+`GET /api/v1/health` — returns `200 OK` with version info. Used by deploy workflow to verify the stack is up after each deploy.
 
 ---
 
@@ -187,11 +185,9 @@ Engoal-lite/
 │   └── uv.lock
 ├── frontend/              # Next.js application
 │   ├── src/
-│   ├── tests/
-│   ├── e2e/
+│   │   └── tests/         # Vitest unit + integration tests
 │   └── package.json
-├── docker-compose.yml         # Local dev stack
-├── docker-compose.test.yml    # Test database only (port 5433)
+├── docker-compose.test.yml    # Test Postgres database (port 5433)
 ├── .gitignore
 └── README.md
 ```

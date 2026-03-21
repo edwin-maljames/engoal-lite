@@ -1,9 +1,9 @@
-export interface ApiError {
-  detail: {
+export interface ApiErrorResponse {
+  data: null;
+  error: {
     code: string;
     message: string;
-    field?: string | null;
-    errors?: Array<{ field: string; message: string; type: string }>;
+    field?: string;
   };
 }
 

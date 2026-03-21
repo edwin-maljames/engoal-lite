@@ -92,7 +92,7 @@ class TestLogin:
             json={"email": "test@engoal-lite.app", "password": "WrongPassword!@"},
         )
         assert response.status_code == 401
-        assert response.json()["detail"]["code"] == "INVALID_CREDENTIALS"
+        assert response.json()["error"]["code"] == "INVALID_CREDENTIALS"
 
     @pytest.mark.anyio
     async def test_login_unknown_email(self, client: AsyncClient) -> None:

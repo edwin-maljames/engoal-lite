@@ -1,7 +1,6 @@
 """FastAPI dependencies — database session and authenticated user."""
 
 import uuid
-from collections.abc import AsyncGenerator
 
 from fastapi import Depends
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
@@ -50,9 +49,3 @@ async def get_current_user(
         raise TokenInvalidException()
 
     return user
-
-
-# Re-export get_db for convenience so API modules import from one place
-async def get_db_dep() -> AsyncGenerator[AsyncSession, None]:
-    async for session in get_db():
-        yield session

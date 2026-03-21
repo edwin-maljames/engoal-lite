@@ -2,9 +2,7 @@
 
 from datetime import UTC, datetime
 
-from fastapi import APIRouter, Depends
-from slowapi import Limiter
-from slowapi.util import get_remote_address
+from fastapi import APIRouter, Depends, Request
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -15,6 +13,7 @@ from app.core.exceptions import (
     InvalidCredentialsException,
     TokenInvalidException,
 )
+from app.core.rate_limit import limiter
 from app.core.security import (
     create_access_token,
     generate_refresh_token,
@@ -32,11 +31,11 @@ from app.schemas.auth import (
     SetupRequest,
     SetupStatusResponse,
     TokenResponse,
+    UpdateMeRequest,
     UserResponse,
 )
 
 router = APIRouter(prefix="/auth", tags=["auth"])
-limiter = Limiter(key_func=get_remote_address)
 
 
 def _token_response(user: User, refresh_raw: str) -> TokenResponse:
@@ -62,7 +61,9 @@ async def setup_status(db: AsyncSession = Depends(get_db)) -> SetupStatusRespons
 
 
 @router.post("/setup", response_model=UserResponse, status_code=201)
+@limiter.limit("5/minute")
 async def setup(
+    request: Request,
     body: SetupRequest,
     db: AsyncSession = Depends(get_db),
 ) -> UserResponse:
@@ -87,7 +88,9 @@ async def setup(
 
 
 @router.post("/login", response_model=TokenResponse)
+@limiter.limit("10/minute")
 async def login(
+    request: Request,
     body: LoginRequest,
     db: AsyncSession = Depends(get_db),
 ) -> TokenResponse:
@@ -130,10 +133,6 @@ async def refresh(
 
     if stored is None:
         raise TokenInvalidException()
-
-    # If token is revoked (compromise detection) — revoke all user tokens
-    # (already covered by the filter above, but if a revoked hash is presented,
-    #  we just raise 401; full revocation is handled here for detected reuse)
 
     # Revoke old token and issue new pair (rotation)
     stored.revoked = True
@@ -187,17 +186,11 @@ async def me(current_user: User = Depends(get_current_user)) -> UserResponse:
 
 @router.put("/me", response_model=UserResponse)
 async def update_me(
-    body: dict[str, str],
+    body: UpdateMeRequest,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ) -> UserResponse:
     """Update the authenticated user's display name."""
-    if "full_name" in body:
-        name = body["full_name"].strip()
-        if not name or len(name) > 100:
-            from app.core.exceptions import ValidationException
-
-            raise ValidationException("full_name must be 1–100 characters.", "full_name")
-        current_user.full_name = name
-        await db.flush()
+    current_user.full_name = body.full_name
+    await db.flush()
     return UserResponse.model_validate(current_user)
