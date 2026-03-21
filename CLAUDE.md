@@ -42,17 +42,52 @@ Both must be running for full local development.
 
 ---
 
+## Database
+
+### Environment model
+
+| Context | Engine | `DATABASE_URL` |
+|---------|--------|----------------|
+| Worktree dev (local run) | SQLite | `sqlite:///./engoal_lite_dev.db` |
+| Unit / integration tests (pre-push) | SQLite in-memory | `sqlite:///:memory:` |
+| E2E tests (post-merge, local Mac) | Postgres on local Mac | `postgresql://test_user:test_pwd@localhost:5432/engoal_lite_test` |
+| CI | Postgres via `docker-compose.test.yml` | `postgresql://test_user:test_pwd@localhost:5433/engoal_lite_test` |
+
+### Rules
+
+- **Dev always uses SQLite** — no Docker, no port conflicts, one file per worktree.
+- **Never write raw SQL or use Postgres-specific features** (JSONB, arrays, `ON CONFLICT DO UPDATE`, `ILIKE`) in application code. Use the ORM for all queries. These silently pass SQLite tests but break in Postgres.
+- **E2E and CI always use Postgres** — this is the hard gate before anything ships.
+- **SQLite `.db` files are gitignored** — never commit them.
+
+### One-time local Mac Postgres setup
+
+```bash
+createuser -s test_user
+psql -c "ALTER USER test_user WITH PASSWORD 'test_pwd';"
+createdb -O test_user engoal_lite_test
+```
+
+---
+
 ## Shared Environment Variables
 
 Create `.env` files at the appropriate layer — never at repo root.
 
-| Variable | Location | Purpose |
-|----------|----------|---------|
-| `DATABASE_URL` | `backend/.env` | Postgres connection string |
-| `SECRET_KEY` | `backend/.env` | App secret for JWT / sessions |
-| `NEXT_PUBLIC_API_URL` | `frontend/.env.local` | Backend API base URL |
+| Variable | Location | Dev value | Test value |
+|----------|----------|-----------|------------|
+| `DATABASE_URL` | `backend/.env` / `backend/.env.test` | `sqlite:///./engoal_lite_dev.db` | `postgresql://test_user:test_pwd@localhost:5432/engoal_lite_test` |
+| `SECRET_KEY` | `backend/.env` / `backend/.env.test` | any random string | any random string |
+| `NEXT_PUBLIC_API_URL` | `frontend/.env.local` / `frontend/.env.test.local` | `http://localhost:8000/api` | `http://localhost:8000/api` |
 
-Use `.env.example` files (no real values) at each layer so agents know what variables are required.
+Copy from the `.example` files — never commit the actual `.env` files:
+
+```bash
+cp backend/.env.example backend/.env
+cp backend/.env.test.example backend/.env.test
+cp frontend/.env.local.example frontend/.env.local
+cp frontend/.env.test.local.example frontend/.env.test.local
+```
 
 ---
 

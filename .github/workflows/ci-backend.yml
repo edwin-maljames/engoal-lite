@@ -1,0 +1,108 @@
+name: CI Backend
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "backend/**"
+      - ".github/workflows/ci-backend.yml"
+
+defaults:
+  run:
+    working-directory: backend
+
+concurrency:
+  group: ci-backend-${{ github.head_ref || github.ref_name }}
+  cancel-in-progress: true
+
+jobs:
+  lint-and-typecheck:
+    name: "Backend: Lint & Type Check"
+    runs-on: ubuntu-latest
+    steps:
+      - name: "step:checkout"
+        uses: actions/checkout@v4
+
+      - name: "step:setup-python"
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: "step:install-uv"
+        uses: astral-sh/setup-uv@v4
+
+      - name: "step:cache-uv"
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/uv
+          key: uv-${{ runner.os }}-${{ hashFiles('backend/uv.lock') }}
+          restore-keys: |
+            uv-${{ runner.os }}-
+
+      - name: "step:install-deps"
+        run: uv sync --frozen
+
+      - name: "step:lint-ruff"
+        run: uv run ruff check .
+
+      - name: "step:typecheck-mypy"
+        run: uv run mypy app/
+
+  test:
+    name: "Backend: Unit & Integration Tests (pytest)"
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: engoal_lite_test
+          POSTGRES_PASSWORD: test_password
+          POSTGRES_DB: engoal_lite_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready -U engoal_lite_test"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
+
+    env:
+      DATABASE_URL: postgresql://engoal_lite_test:test_password@localhost:5432/engoal_lite_test
+
+    steps:
+      - name: "step:checkout"
+        uses: actions/checkout@v4
+
+      - name: "step:setup-python"
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: "step:install-uv"
+        uses: astral-sh/setup-uv@v4
+
+      - name: "step:cache-uv"
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/uv
+          key: uv-${{ runner.os }}-${{ hashFiles('backend/uv.lock') }}
+          restore-keys: |
+            uv-${{ runner.os }}-
+
+      - name: "step:install-deps"
+        run: uv sync --frozen
+
+      - name: "step:run-migrations"
+        run: uv run alembic upgrade head
+
+      - name: "step:test-pytest"
+        run: uv run pytest tests/ -v --tb=short --junitxml=test-results.xml --cov=app --cov-report=term-missing
+
+      - name: "step:upload-test-results"
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: backend-test-results
+          path: backend/test-results.xml
+          retention-days: 14
