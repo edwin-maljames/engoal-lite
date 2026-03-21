@@ -1,6 +1,6 @@
-# Engoal CI/CD Specification & Implementation Guide
+# Engoal-lite CI/CD Specification & Implementation Guide
 
-> **Project:** Engoal -- Personal Financial Planning App
+> **Project:** Engoal-lite -- Personal Financial Planning App
 > **Owner:** edwin-maljames
 > **Lab:** Alteeza Lab (AI-native agentic development)
 > **Last updated:** 2026-02-22
@@ -93,7 +93,7 @@ Developer / Claude Code Agent
 ### Repository Structure
 
 ```
-Engoal/
+Engoal-lite/
   .github/
     workflows/
       ci-frontend.yml
@@ -351,19 +351,19 @@ jobs:
       postgres:
         image: postgres:16
         env:
-          POSTGRES_USER: engoal_test
+          POSTGRES_USER: engoal_lite_test
           POSTGRES_PASSWORD: test_password
-          POSTGRES_DB: engoal_test
+          POSTGRES_DB: engoal_lite_test
         ports:
           - 5432:5432
         options: >-
-          --health-cmd="pg_isready -U engoal_test"
+          --health-cmd="pg_isready -U engoal_lite_test"
           --health-interval=10s
           --health-timeout=5s
           --health-retries=5
 
     env:
-      DATABASE_URL: postgresql://engoal_test:test_password@localhost:5432/engoal_test
+      DATABASE_URL: postgresql://engoal_lite_test:test_password@localhost:5432/engoal_lite_test
 
     steps:
       - name: "step:checkout"
@@ -449,7 +449,7 @@ jobs:
           script: |
             set -euo pipefail
 
-            PROJECT_DIR="/opt/engoal"
+            PROJECT_DIR="/opt/engoal_lite"
             cd "$PROJECT_DIR"
 
             echo "=== Pulling latest main ==="
@@ -463,7 +463,7 @@ jobs:
             cd ..
 
             echo "=== Restarting backend (FastAPI) ==="
-            sudo systemctl restart engoal-backend
+            sudo systemctl restart engoal_lite-backend
             sleep 3
 
             echo "=== Verifying backend is up ==="
@@ -474,7 +474,7 @@ jobs:
               fi
               if [ "$i" -eq 5 ]; then
                 echo "ERROR: Backend health check failed after 5 attempts"
-                sudo journalctl -u engoal-backend --no-pager -n 50
+                sudo journalctl -u engoal_lite-backend --no-pager -n 50
                 exit 1
               fi
               echo "Backend not ready, retrying in 3s..."
@@ -488,7 +488,7 @@ jobs:
             cd ..
 
             echo "=== Restarting frontend (Next.js) ==="
-            sudo systemctl restart engoal-frontend
+            sudo systemctl restart engoal_lite-frontend
             sleep 3
 
             echo "=== Verifying frontend is up ==="
@@ -499,7 +499,7 @@ jobs:
               fi
               if [ "$i" -eq 5 ]; then
                 echo "ERROR: Frontend health check failed after 5 attempts"
-                sudo journalctl -u engoal-frontend --no-pager -n 50
+                sudo journalctl -u engoal_lite-frontend --no-pager -n 50
                 exit 1
               fi
               echo "Frontend not ready, retrying in 3s..."
@@ -535,20 +535,20 @@ The deploy follows this specific order for a reason:
 
 These service files should exist on the Droplet. They are not managed by CI but are documented here for completeness.
 
-**`/etc/systemd/system/engoal-backend.service`**
+**`/etc/systemd/system/engoal_lite-backend.service`**
 
 ```ini
 [Unit]
-Description=Engoal FastAPI Backend
+Description=Engoal-lite FastAPI Backend
 After=network.target postgresql.service
 
 [Service]
 Type=exec
-User=engoal
-Group=engoal
-WorkingDirectory=/opt/engoal/backend
-EnvironmentFile=/opt/engoal/.env
-ExecStart=/opt/engoal/backend/.venv/bin/uvicorn app.main:app --host 127.0.0.1 --port 8000
+User=engoal_lite
+Group=engoal_lite
+WorkingDirectory=/opt/engoal_lite/backend
+EnvironmentFile=/opt/engoal_lite/.env
+ExecStart=/opt/engoal_lite/backend/.venv/bin/uvicorn app.main:app --host 127.0.0.1 --port 8000
 Restart=on-failure
 RestartSec=5
 
@@ -556,19 +556,19 @@ RestartSec=5
 WantedBy=multi-user.target
 ```
 
-**`/etc/systemd/system/engoal-frontend.service`**
+**`/etc/systemd/system/engoal_lite-frontend.service`**
 
 ```ini
 [Unit]
-Description=Engoal Next.js Frontend
-After=network.target engoal-backend.service
+Description=Engoal-lite Next.js Frontend
+After=network.target engoal_lite-backend.service
 
 [Service]
 Type=exec
-User=engoal
-Group=engoal
-WorkingDirectory=/opt/engoal/frontend
-EnvironmentFile=/opt/engoal/.env
+User=engoal_lite
+Group=engoal_lite
+WorkingDirectory=/opt/engoal_lite/frontend
+EnvironmentFile=/opt/engoal_lite/.env
 ExecStart=/usr/bin/npx next start --port 3000
 Restart=on-failure
 RestartSec=5
@@ -590,19 +590,19 @@ Settings > Secrets and variables > Actions > Repository secrets
 | Secret Name    | Used In          | Purpose                                                              |
 | -------------- | ---------------- | -------------------------------------------------------------------- |
 | `DO_HOST`      | `deploy.yml`     | DigitalOcean Droplet IP address or hostname                          |
-| `DO_USER`      | `deploy.yml`     | SSH username on the Droplet (e.g., `engoal` or `deploy`)             |
+| `DO_USER`      | `deploy.yml`     | SSH username on the Droplet (e.g., `engoal_lite` or `deploy`)             |
 | `DO_SSH_KEY`   | `deploy.yml`     | Private SSH key for authenticating to the Droplet                    |
 
 ### Secrets That Live on the Droplet (Not in GitHub)
 
-These are stored in `/opt/engoal/.env` on the Droplet and loaded by systemd's `EnvironmentFile` directive. They are **never** committed to the repository or stored in GitHub Secrets:
+These are stored in `/opt/engoal_lite/.env` on the Droplet and loaded by systemd's `EnvironmentFile` directive. They are **never** committed to the repository or stored in GitHub Secrets:
 
 | Variable              | Purpose                                                 |
 | --------------------- | ------------------------------------------------------- |
 | `DATABASE_URL`        | PostgreSQL connection string for production              |
 | `SECRET_KEY`          | FastAPI secret key for JWT signing                       |
 | `NEXTAUTH_SECRET`     | Next.js authentication secret (if using NextAuth)        |
-| `NEXTAUTH_URL`        | Canonical URL of the frontend (e.g., `https://engoal.app`) |
+| `NEXTAUTH_URL`        | Canonical URL of the frontend (e.g., `https://engoal_lite.app`) |
 | `NEXT_PUBLIC_API_URL` | Public API URL the frontend calls                        |
 
 ### CI Test Database Credentials
@@ -614,10 +614,10 @@ The PostgreSQL credentials used in `ci-backend.yml` are **not secrets** -- they 
 Generate a dedicated deploy key (do not reuse personal keys):
 
 ```bash
-ssh-keygen -t ed25519 -C "engoal-github-deploy" -f ~/.ssh/engoal_deploy -N ""
+ssh-keygen -t ed25519 -C "engoal_lite-github-deploy" -f ~/.ssh/engoal_lite_deploy -N ""
 ```
 
-- Copy the **public** key to the Droplet: add to `/home/engoal/.ssh/authorized_keys`
+- Copy the **public** key to the Droplet: add to `/home/engoal_lite/.ssh/authorized_keys`
 - Copy the **private** key content to the GitHub secret `DO_SSH_KEY`
 - Restrict the deploy user's permissions on the Droplet to only what is needed (git pull, systemctl restart, npm/uv commands)
 
@@ -645,7 +645,7 @@ Run these commands from the repository root (SSH authenticated):
 
 ```bash
 # Enable branch protection on main
-gh api repos/edwin-maljames/Engoal/branches/main/protection \
+gh api repos/edwin-maljames/Engoal-lite/branches/main/protection \
   --method PUT \
   --input - <<'EOF'
 {
@@ -954,8 +954,8 @@ ESCALATION: Deploy failed due to infrastructure issue.
 If the situation is urgent and the revert-and-deploy cycle is too slow:
 
 ```bash
-ssh engoal@<droplet-ip>
-cd /opt/engoal
+ssh engoal_lite@<droplet-ip>
+cd /opt/engoal_lite
 
 # Roll back to previous commit
 git log --oneline -5
@@ -963,9 +963,9 @@ git checkout <last-good-sha>
 
 # Restart services
 cd backend && uv sync --frozen && uv run alembic upgrade head
-sudo systemctl restart engoal-backend
+sudo systemctl restart engoal_lite-backend
 cd ../frontend && npm ci && npx next build
-sudo systemctl restart engoal-frontend
+sudo systemctl restart engoal_lite-frontend
 
 # Verify
 curl -s http://localhost:8000/api/health | python3 -m json.tool
@@ -1034,10 +1034,10 @@ gh run list --workflow=deploy.yml --limit 10
 gh pr view <pr-number>
 
 # Check branch protection rules
-gh api repos/edwin-maljames/Engoal/branches/main/protection
+gh api repos/edwin-maljames/Engoal-lite/branches/main/protection
 
 # Set remote to SSH (if accidentally HTTPS)
-git remote set-url origin git@github.com:edwin-maljames/Engoal.git
+git remote set-url origin git@github.com:edwin-maljames/Engoal-lite.git
 ```
 
 ## Appendix B: File Path Summary
@@ -1049,6 +1049,6 @@ git remote set-url origin git@github.com:edwin-maljames/Engoal.git
 | `.github/workflows/deploy.yml` | Production deploy pipeline |
 | `.github/pull_request_template.md` | PR template for all pull requests |
 | `backend/app/routes/health.py` | Health check endpoint |
-| `/opt/engoal/.env` | Production environment variables (on Droplet only) |
-| `/etc/systemd/system/engoal-backend.service` | Backend systemd unit (on Droplet) |
-| `/etc/systemd/system/engoal-frontend.service` | Frontend systemd unit (on Droplet) |
+| `/opt/engoal_lite/.env` | Production environment variables (on Droplet only) |
+| `/etc/systemd/system/engoal_lite-backend.service` | Backend systemd unit (on Droplet) |
+| `/etc/systemd/system/engoal_lite-frontend.service` | Frontend systemd unit (on Droplet) |

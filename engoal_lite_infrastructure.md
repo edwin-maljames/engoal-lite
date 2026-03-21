@@ -1,6 +1,6 @@
-# Engoal Infrastructure Document
+# Engoal-lite Infrastructure Document
 
-> **App:** Engoal -- Personal Financial Planning
+> **App:** Engoal-lite -- Personal Financial Planning
 > **Owner:** edwin-maljames (GitHub)
 > **Last Updated:** 2026-02-22
 > **Classification:** Single-user, single-server deployment on DigitalOcean
@@ -48,12 +48,12 @@
 ### Provisioning Command (doctl)
 
 ```bash
-doctl compute droplet create engoal \
+doctl compute droplet create engoal_lite \
   --region nyc1 \
   --size s-1vcpu-2gb \
   --image ubuntu-24-04-x64 \
   --ssh-keys $(doctl compute ssh-key list --format ID --no-header | tr '\n' ',') \
-  --tag-name engoal \
+  --tag-name engoal_lite \
   --enable-monitoring \
   --wait
 ```
@@ -67,7 +67,7 @@ doctl compute droplet create engoal \
 ### Directory Structure
 
 ```
-/opt/engoal/                        # Application root (owned by engoal user)
+/opt/engoal_lite/                        # Application root (owned by engoal_lite user)
   backend/                          # FastAPI source code
     .env                            # Backend environment variables
     alembic/                        # Database migrations
@@ -80,19 +80,19 @@ doctl compute droplet create engoal \
     package.json
   venv/                             # Python virtual environment
 
-/var/log/engoal/                    # Application logs
+/var/log/engoal_lite/                    # Application logs
   backend.log                       # FastAPI stdout/stderr
   frontend.log                      # Next.js stdout/stderr
 
-/var/backups/engoal/                # PostgreSQL backups
+/var/backups/engoal_lite/                # PostgreSQL backups
   daily/                            # pg_dump files (last 7 days)
 
-/etc/nginx/sites-available/engoal   # Nginx site config
-/etc/nginx/sites-enabled/engoal     # Symlink to above
+/etc/nginx/sites-available/engoal_lite   # Nginx site config
+/etc/nginx/sites-enabled/engoal_lite     # Symlink to above
 
 /etc/systemd/system/
-  engoal-backend.service            # FastAPI service unit
-  engoal-frontend.service           # Next.js service unit
+  engoal_lite-backend.service            # FastAPI service unit
+  engoal_lite-frontend.service           # Next.js service unit
 ```
 
 ### Process Architecture
@@ -111,10 +111,10 @@ doctl compute droplet create engoal \
 Create a non-root user to own and run the application:
 
 ```bash
-sudo useradd --system --shell /usr/sbin/nologin --home-dir /opt/engoal --create-home engoal
+sudo useradd --system --shell /usr/sbin/nologin --home-dir /opt/engoal_lite --create-home engoal_lite
 ```
 
-All application files under `/opt/engoal/` should be owned by `engoal:engoal`. The systemd services run as this user.
+All application files under `/opt/engoal_lite/` should be owned by `engoal_lite:engoal_lite`. The systemd services run as this user.
 
 ---
 
@@ -122,21 +122,21 @@ All application files under `/opt/engoal/` should be owned by `engoal:engoal`. T
 
 ### Main Site Configuration
 
-File: `/etc/nginx/sites-available/engoal`
+File: `/etc/nginx/sites-available/engoal_lite`
 
 ```nginx
 # Rate limiting zone: 10 requests/second per IP, burst of 20
-limit_req_zone $binary_remote_addr zone=engoal_ratelimit:10m rate=10r/s;
+limit_req_zone $binary_remote_addr zone=engoal_lite_ratelimit:10m rate=10r/s;
 
 # API-specific rate limiting: 5 requests/second per IP
-limit_req_zone $binary_remote_addr zone=engoal_api_ratelimit:10m rate=5r/s;
+limit_req_zone $binary_remote_addr zone=engoal_lite_api_ratelimit:10m rate=5r/s;
 
 # Upstream definitions
-upstream engoal_backend {
+upstream engoal_lite_backend {
     server 127.0.0.1:8000;
 }
 
-upstream engoal_frontend {
+upstream engoal_lite_frontend {
     server 127.0.0.1:3000;
 }
 
@@ -144,7 +144,7 @@ upstream engoal_frontend {
 server {
     listen 80;
     listen [::]:80;
-    server_name engoal.example.com;
+    server_name engoal-lite.example.com;
 
     # Allow ACME challenge for Certbot
     location /.well-known/acme-challenge/ {
@@ -161,14 +161,14 @@ server {
 server {
     listen 443 ssl http2;
     listen [::]:443 ssl http2;
-    server_name engoal.example.com;
+    server_name engoal-lite.example.com;
 
     # -----------------------------------------------------------
     # SSL/TLS (managed by Certbot)
     # -----------------------------------------------------------
-    ssl_certificate     /etc/letsencrypt/live/engoal.example.com/fullchain.pem;
-    ssl_certificate_key /etc/letsencrypt/live/engoal.example.com/privkey.pem;
-    ssl_trusted_certificate /etc/letsencrypt/live/engoal.example.com/chain.pem;
+    ssl_certificate     /etc/letsencrypt/live/engoal-lite.example.com/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/engoal-lite.example.com/privkey.pem;
+    ssl_trusted_certificate /etc/letsencrypt/live/engoal-lite.example.com/chain.pem;
 
     # Modern TLS configuration
     ssl_protocols TLSv1.2 TLSv1.3;
@@ -234,10 +234,10 @@ server {
     # API Routes -> FastAPI Backend
     # -----------------------------------------------------------
     location /api/ {
-        limit_req zone=engoal_api_ratelimit burst=10 nodelay;
+        limit_req zone=engoal_lite_api_ratelimit burst=10 nodelay;
         limit_req_status 429;
 
-        proxy_pass http://engoal_backend;
+        proxy_pass http://engoal_lite_backend;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
@@ -255,7 +255,7 @@ server {
         # allow YOUR_IP_HERE;
         # deny all;
 
-        proxy_pass http://engoal_backend;
+        proxy_pass http://engoal_lite_backend;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
@@ -263,7 +263,7 @@ server {
     }
 
     location /openapi.json {
-        proxy_pass http://engoal_backend;
+        proxy_pass http://engoal_lite_backend;
         proxy_set_header Host $host;
     }
 
@@ -271,10 +271,10 @@ server {
     # Everything Else -> Next.js Frontend
     # -----------------------------------------------------------
     location / {
-        limit_req zone=engoal_ratelimit burst=20 nodelay;
+        limit_req zone=engoal_lite_ratelimit burst=20 nodelay;
         limit_req_status 429;
 
-        proxy_pass http://engoal_frontend;
+        proxy_pass http://engoal_lite_frontend;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
@@ -287,7 +287,7 @@ server {
 
     # Next.js static assets (long cache)
     location /_next/static/ {
-        proxy_pass http://engoal_frontend;
+        proxy_pass http://engoal_lite_frontend;
         proxy_cache_valid 200 365d;
         add_header Cache-Control "public, max-age=31536000, immutable";
     }
@@ -310,7 +310,7 @@ server {
 ### Enable the Site
 
 ```bash
-sudo ln -s /etc/nginx/sites-available/engoal /etc/nginx/sites-enabled/engoal
+sudo ln -s /etc/nginx/sites-available/engoal_lite /etc/nginx/sites-enabled/engoal_lite
 sudo rm -f /etc/nginx/sites-enabled/default
 sudo nginx -t
 sudo systemctl reload nginx
@@ -322,7 +322,7 @@ sudo systemctl reload nginx
 sudo apt install certbot python3-certbot-nginx -y
 
 # Obtain certificate (Nginx plugin handles config automatically)
-sudo certbot --nginx -d engoal.example.com --non-interactive --agree-tos -m your-email@example.com
+sudo certbot --nginx -d engoal-lite.example.com --non-interactive --agree-tos -m your-email@example.com
 
 # Verify auto-renewal timer is active
 sudo systemctl status certbot.timer
@@ -385,9 +385,9 @@ Edit `/etc/postgresql/16/main/pg_hba.conf` (replace the default entries):
 ```
 # TYPE  DATABASE        USER            ADDRESS                 METHOD
 local   all             postgres                                peer
-local   engoal_db       engoal_user                             scram-sha-256
-host    engoal_db       engoal_user     127.0.0.1/32            scram-sha-256
-host    engoal_db       engoal_user     ::1/128                 scram-sha-256
+local   engoal_lite_db       engoal_lite_user                             scram-sha-256
+host    engoal_lite_db       engoal_lite_user     127.0.0.1/32            scram-sha-256
+host    engoal_lite_db       engoal_lite_user     ::1/128                 scram-sha-256
 # Deny everything else
 local   all             all                                     reject
 host    all             all             0.0.0.0/0               reject
@@ -404,7 +404,7 @@ sudo systemctl restart postgresql
 ```bash
 sudo -u postgres psql <<'SQL'
 -- Create application user (NOT a superuser)
-CREATE USER engoal_user WITH
+CREATE USER engoal_lite_user WITH
     LOGIN
     PASSWORD 'REPLACE_WITH_STRONG_PASSWORD'
     NOSUPERUSER
@@ -413,19 +413,19 @@ CREATE USER engoal_user WITH
     CONNECTION LIMIT 10;
 
 -- Create database owned by the app user
-CREATE DATABASE engoal_db
-    OWNER engoal_user
+CREATE DATABASE engoal_lite_db
+    OWNER engoal_lite_user
     ENCODING 'UTF8'
     LC_COLLATE 'en_US.UTF-8'
     LC_CTYPE 'en_US.UTF-8'
     TEMPLATE template0;
 
 -- Connect to the new database and lock down permissions
-\c engoal_db
+\c engoal_lite_db
 
 -- Revoke default public access
 REVOKE ALL ON SCHEMA public FROM PUBLIC;
-GRANT USAGE, CREATE ON SCHEMA public TO engoal_user;
+GRANT USAGE, CREATE ON SCHEMA public TO engoal_lite_user;
 
 -- The app user can create tables via Alembic migrations
 -- but cannot modify system catalogs or other databases
@@ -438,15 +438,15 @@ SQL
 
 Daily `pg_dump` via cron, keeping the last 7 days.
 
-Create the backup script at `/opt/engoal/scripts/backup_db.sh`:
+Create the backup script at `/opt/engoal_lite/scripts/backup_db.sh`:
 
 ```bash
 #!/usr/bin/env bash
 set -euo pipefail
 
-BACKUP_DIR="/var/backups/engoal/daily"
-DB_NAME="engoal_db"
-DB_USER="engoal_user"
+BACKUP_DIR="/var/backups/engoal_lite/daily"
+DB_NAME="engoal_lite_db"
+DB_USER="engoal_lite_user"
 TIMESTAMP=$(date +%Y-%m-%d_%H%M%S)
 BACKUP_FILE="${BACKUP_DIR}/${DB_NAME}_${TIMESTAMP}.sql.gz"
 RETENTION_DAYS=7
@@ -472,25 +472,25 @@ echo "Backup completed: ${BACKUP_FILE} ($(du -h "${BACKUP_FILE}" | cut -f1))"
 Set permissions and install cron job:
 
 ```bash
-sudo chmod 750 /opt/engoal/scripts/backup_db.sh
-sudo chown engoal:engoal /opt/engoal/scripts/backup_db.sh
+sudo chmod 750 /opt/engoal_lite/scripts/backup_db.sh
+sudo chown engoal_lite:engoal_lite /opt/engoal_lite/scripts/backup_db.sh
 
 # Add to root crontab (runs daily at 02:00 UTC)
-sudo crontab -l 2>/dev/null | { cat; echo "0 2 * * * /opt/engoal/scripts/backup_db.sh >> /var/log/engoal/backup.log 2>&1"; } | sudo crontab -
+sudo crontab -l 2>/dev/null | { cat; echo "0 2 * * * /opt/engoal_lite/scripts/backup_db.sh >> /var/log/engoal_lite/backup.log 2>&1"; } | sudo crontab -
 ```
 
-> **Important:** Store the database password in a `.pgpass` file at `/opt/engoal/.pgpass` so the cron job does not need it inline:
+> **Important:** Store the database password in a `.pgpass` file at `/opt/engoal_lite/.pgpass` so the cron job does not need it inline:
 >
 > ```
-> 127.0.0.1:5432:engoal_db:engoal_user:REPLACE_WITH_STRONG_PASSWORD
+> 127.0.0.1:5432:engoal_lite_db:engoal_lite_user:REPLACE_WITH_STRONG_PASSWORD
 > ```
 >
 > ```bash
-> chmod 600 /opt/engoal/.pgpass
-> chown engoal:engoal /opt/engoal/.pgpass
+> chmod 600 /opt/engoal_lite/.pgpass
+> chown engoal_lite:engoal_lite /opt/engoal_lite/.pgpass
 > ```
 >
-> Set `PGPASSFILE=/opt/engoal/.pgpass` in the backup script's environment or the engoal user's profile.
+> Set `PGPASSFILE=/opt/engoal_lite/.pgpass` in the backup script's environment or the engoal_lite user's profile.
 
 ### Connection Pooling
 
@@ -502,7 +502,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
 engine = create_engine(
-    "postgresql+psycopg2://engoal_user:PASSWORD@127.0.0.1:5432/engoal_db",
+    "postgresql+psycopg2://engoal_lite_user:PASSWORD@127.0.0.1:5432/engoal_lite_db",
     pool_size=5,          # Maximum persistent connections
     max_overflow=2,       # Extra connections allowed under load
     pool_timeout=30,      # Seconds to wait for a connection from the pool
@@ -521,18 +521,18 @@ SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 ### Required Environment Variables
 
-#### Backend (`/opt/engoal/backend/.env`)
+#### Backend (`/opt/engoal_lite/backend/.env`)
 
 ```bash
 # Database
-DATABASE_URL=postgresql+psycopg2://engoal_user:REPLACE_WITH_STRONG_PASSWORD@127.0.0.1:5432/engoal_db
+DATABASE_URL=postgresql+psycopg2://engoal_lite_user:REPLACE_WITH_STRONG_PASSWORD@127.0.0.1:5432/engoal_lite_db
 
 # Application Security
 SECRET_KEY=REPLACE_WITH_64_CHAR_RANDOM_HEX
 # Generate with: python -c "import secrets; print(secrets.token_hex(32))"
 
 # CORS
-ALLOWED_ORIGINS=https://engoal.example.com
+ALLOWED_ORIGINS=https://engoal-lite.example.com
 
 # FastAPI
 APP_ENV=production
@@ -545,11 +545,11 @@ ACCESS_TOKEN_EXPIRE_MINUTES=30
 REFRESH_TOKEN_EXPIRE_DAYS=7
 ```
 
-#### Frontend (`/opt/engoal/frontend/.env.local`)
+#### Frontend (`/opt/engoal_lite/frontend/.env.local`)
 
 ```bash
 # API endpoint (server-side rendering calls this)
-NEXT_PUBLIC_API_URL=https://engoal.example.com/api
+NEXT_PUBLIC_API_URL=https://engoal-lite.example.com/api
 ```
 
 ### Storage on the Droplet
@@ -557,14 +557,14 @@ NEXT_PUBLIC_API_URL=https://engoal.example.com/api
 Use systemd `EnvironmentFile` directives to load environment variables. This is more secure than sourcing `.env` files because:
 - systemd manages file access permissions
 - Variables are not visible in `/proc/<pid>/environ` to other non-root users
-- The `.env` files are readable only by root and the `engoal` user
+- The `.env` files are readable only by root and the `engoal_lite` user
 
 ```bash
 # Secure the .env files
-sudo chmod 600 /opt/engoal/backend/.env
-sudo chown engoal:engoal /opt/engoal/backend/.env
-sudo chmod 600 /opt/engoal/frontend/.env.local
-sudo chown engoal:engoal /opt/engoal/frontend/.env.local
+sudo chmod 600 /opt/engoal_lite/backend/.env
+sudo chown engoal_lite:engoal_lite /opt/engoal_lite/backend/.env
+sudo chmod 600 /opt/engoal_lite/frontend/.env.local
+sudo chown engoal_lite:engoal_lite /opt/engoal_lite/frontend/.env.local
 ```
 
 The systemd service files (see Section 8) reference these with `EnvironmentFile=`.
@@ -734,7 +734,7 @@ sudo fail2ban-client status sshd
 Add to `~/.ssh/config` on the Mac Mini for easy access:
 
 ```
-Host engoal
+Host engoal_lite
     HostName DROPLET_IP_OR_HOSTNAME
     User deploy
     Port 2222
@@ -742,7 +742,7 @@ Host engoal
     IdentitiesOnly yes
 ```
 
-Then connect with just: `ssh engoal`
+Then connect with just: `ssh engoal_lite`
 
 ---
 
@@ -750,21 +750,21 @@ Then connect with just: `ssh engoal`
 
 ### FastAPI Backend Service
 
-File: `/etc/systemd/system/engoal-backend.service`
+File: `/etc/systemd/system/engoal_lite-backend.service`
 
 ```ini
 [Unit]
-Description=Engoal FastAPI Backend
+Description=Engoal-lite FastAPI Backend
 After=network.target postgresql.service
 Requires=postgresql.service
 
 [Service]
 Type=exec
-User=engoal
-Group=engoal
-WorkingDirectory=/opt/engoal/backend
-EnvironmentFile=/opt/engoal/backend/.env
-ExecStart=/opt/engoal/venv/bin/uvicorn app.main:app \
+User=engoal_lite
+Group=engoal_lite
+WorkingDirectory=/opt/engoal_lite/backend
+EnvironmentFile=/opt/engoal_lite/backend/.env
+ExecStart=/opt/engoal_lite/venv/bin/uvicorn app.main:app \
     --host 127.0.0.1 \
     --port 8000 \
     --workers 2 \
@@ -784,7 +784,7 @@ StartLimitIntervalSec=60
 NoNewPrivileges=true
 ProtectSystem=strict
 ProtectHome=true
-ReadWritePaths=/var/log/engoal
+ReadWritePaths=/var/log/engoal_lite
 PrivateTmp=true
 ProtectKernelTunables=true
 ProtectKernelModules=true
@@ -793,8 +793,8 @@ RestrictSUIDSGID=true
 RestrictNamespaces=true
 
 # Logging
-StandardOutput=append:/var/log/engoal/backend.log
-StandardError=append:/var/log/engoal/backend.log
+StandardOutput=append:/var/log/engoal_lite/backend.log
+StandardError=append:/var/log/engoal_lite/backend.log
 
 [Install]
 WantedBy=multi-user.target
@@ -802,22 +802,22 @@ WantedBy=multi-user.target
 
 ### Next.js Frontend Service
 
-File: `/etc/systemd/system/engoal-frontend.service`
+File: `/etc/systemd/system/engoal_lite-frontend.service`
 
 ```ini
 [Unit]
-Description=Engoal Next.js Frontend
+Description=Engoal-lite Next.js Frontend
 After=network.target
 
 [Service]
 Type=exec
-User=engoal
-Group=engoal
-WorkingDirectory=/opt/engoal/frontend
-EnvironmentFile=/opt/engoal/frontend/.env.local
+User=engoal_lite
+Group=engoal_lite
+WorkingDirectory=/opt/engoal_lite/frontend
+EnvironmentFile=/opt/engoal_lite/frontend/.env.local
 Environment=NODE_ENV=production
 Environment=PORT=3000
-ExecStart=/usr/bin/node /opt/engoal/frontend/node_modules/.bin/next start --port 3000
+ExecStart=/usr/bin/node /opt/engoal_lite/frontend/node_modules/.bin/next start --port 3000
 ExecReload=/bin/kill -HUP $MAINPID
 
 # Restart policy
@@ -830,7 +830,7 @@ StartLimitIntervalSec=60
 NoNewPrivileges=true
 ProtectSystem=strict
 ProtectHome=true
-ReadWritePaths=/opt/engoal/frontend/.next
+ReadWritePaths=/opt/engoal_lite/frontend/.next
 PrivateTmp=true
 ProtectKernelTunables=true
 ProtectKernelModules=true
@@ -838,8 +838,8 @@ ProtectControlGroups=true
 RestrictSUIDSGID=true
 
 # Logging
-StandardOutput=append:/var/log/engoal/frontend.log
-StandardError=append:/var/log/engoal/frontend.log
+StandardOutput=append:/var/log/engoal_lite/frontend.log
+StandardError=append:/var/log/engoal_lite/frontend.log
 
 [Install]
 WantedBy=multi-user.target
@@ -849,17 +849,17 @@ WantedBy=multi-user.target
 
 ```bash
 # Create log directory
-sudo mkdir -p /var/log/engoal
-sudo chown engoal:engoal /var/log/engoal
+sudo mkdir -p /var/log/engoal_lite
+sudo chown engoal_lite:engoal_lite /var/log/engoal_lite
 
 # Reload systemd, enable, and start
 sudo systemctl daemon-reload
-sudo systemctl enable engoal-backend engoal-frontend
-sudo systemctl start engoal-backend engoal-frontend
+sudo systemctl enable engoal_lite-backend engoal_lite-frontend
+sudo systemctl start engoal_lite-backend engoal_lite-frontend
 
 # Check status
-sudo systemctl status engoal-backend
-sudo systemctl status engoal-frontend
+sudo systemctl status engoal_lite-backend
+sudo systemctl status engoal_lite-frontend
 ```
 
 ---
@@ -870,9 +870,9 @@ sudo systemctl status engoal-frontend
 
 | Log Source       | File Path                              |
 |-----------------|----------------------------------------|
-| FastAPI backend  | `/var/log/engoal/backend.log`          |
-| Next.js frontend | `/var/log/engoal/frontend.log`         |
-| DB backups       | `/var/log/engoal/backup.log`           |
+| FastAPI backend  | `/var/log/engoal_lite/backend.log`          |
+| Next.js frontend | `/var/log/engoal_lite/frontend.log`         |
+| DB backups       | `/var/log/engoal_lite/backup.log`           |
 | Nginx access     | `/var/log/nginx/access.log`            |
 | Nginx error      | `/var/log/nginx/error.log`             |
 | PostgreSQL       | `/var/log/postgresql/postgresql-*.log`  |
@@ -880,21 +880,21 @@ sudo systemctl status engoal-frontend
 
 ### Log Rotation
 
-Create `/etc/logrotate.d/engoal`:
+Create `/etc/logrotate.d/engoal_lite`:
 
 ```
-/var/log/engoal/*.log {
+/var/log/engoal_lite/*.log {
     daily
     missingok
     rotate 14
     compress
     delaycompress
     notifempty
-    create 0640 engoal engoal
+    create 0640 engoal_lite engoal_lite
     sharedscripts
     postrotate
-        systemctl reload engoal-backend 2>/dev/null || true
-        systemctl reload engoal-frontend 2>/dev/null || true
+        systemctl reload engoal_lite-backend 2>/dev/null || true
+        systemctl reload engoal_lite-frontend 2>/dev/null || true
     endscript
 }
 ```
@@ -988,18 +988,18 @@ doctl monitoring alert create \
 
 ### Quick Health Check Script
 
-Save as `/opt/engoal/scripts/health_check.sh`:
+Save as `/opt/engoal_lite/scripts/health_check.sh`:
 
 ```bash
 #!/usr/bin/env bash
 set -euo pipefail
 
-echo "=== Engoal Health Check ==="
+echo "=== Engoal-lite Health Check ==="
 echo "Date: $(date -u '+%Y-%m-%d %H:%M:%S UTC')"
 echo ""
 
 # Service status
-for svc in engoal-backend engoal-frontend nginx postgresql; do
+for svc in engoal_lite-backend engoal_lite-frontend nginx postgresql; do
     status=$(systemctl is-active "${svc}" 2>/dev/null || echo "inactive")
     printf "%-25s %s\n" "${svc}" "${status}"
 done
@@ -1027,7 +1027,7 @@ free -h | grep Mem | awk '{print "  Total: "$2"  Used: "$3"  Free: "$4}'
 echo ""
 
 # DB connection test
-if sudo -u engoal psql -h 127.0.0.1 -U engoal_user -d engoal_db -c "SELECT 1;" > /dev/null 2>&1; then
+if sudo -u engoal_lite psql -h 127.0.0.1 -U engoal_lite_user -d engoal_lite_db -c "SELECT 1;" > /dev/null 2>&1; then
     echo "PostgreSQL: connected OK"
 else
     echo "PostgreSQL: CONNECTION FAILED"
@@ -1080,7 +1080,7 @@ node --version   # Should print v20.x.x
 
 ```bash
 # Application user
-useradd --system --shell /usr/sbin/nologin --home-dir /opt/engoal --create-home engoal
+useradd --system --shell /usr/sbin/nologin --home-dir /opt/engoal_lite --create-home engoal_lite
 
 # Deploy user (for SSH access)
 adduser deploy --disabled-password --gecos ""
@@ -1099,11 +1099,11 @@ usermod -aG sudo deploy
 #### Step 7: Set Up Directory Structure
 
 ```bash
-mkdir -p /opt/engoal/{backend,frontend,scripts}
-mkdir -p /opt/engoal/venv
-mkdir -p /var/log/engoal
-mkdir -p /var/backups/engoal/daily
-chown -R engoal:engoal /opt/engoal /var/log/engoal /var/backups/engoal
+mkdir -p /opt/engoal_lite/{backend,frontend,scripts}
+mkdir -p /opt/engoal_lite/venv
+mkdir -p /var/log/engoal_lite
+mkdir -p /var/backups/engoal_lite/daily
+chown -R engoal_lite:engoal_lite /opt/engoal_lite /var/log/engoal_lite /var/backups/engoal_lite
 ```
 
 #### Step 8: Clone the Repository
@@ -1112,12 +1112,12 @@ chown -R engoal:engoal /opt/engoal /var/log/engoal /var/backups/engoal
 # As deploy user (who has the SSH key for GitHub)
 sudo -u deploy bash -c '
     cd /tmp
-    git clone git@github.com:edwin-maljames/engoal.git
-    cp -r engoal/backend/* /opt/engoal/backend/
-    cp -r engoal/frontend/* /opt/engoal/frontend/
-    rm -rf /tmp/engoal
+    git clone git@github.com:edwin-maljames/engoal_lite.git
+    cp -r engoal_lite/backend/* /opt/engoal_lite/backend/
+    cp -r engoal_lite/frontend/* /opt/engoal_lite/frontend/
+    rm -rf /tmp/engoal_lite
 '
-sudo chown -R engoal:engoal /opt/engoal/backend /opt/engoal/frontend
+sudo chown -R engoal_lite:engoal_lite /opt/engoal_lite/backend /opt/engoal_lite/frontend
 ```
 
 Alternatively, grant the `deploy` user a deploy key scoped to the repository.
@@ -1126,31 +1126,31 @@ Alternatively, grant the `deploy` user a deploy key scoped to the repository.
 
 ```bash
 # Backend
-sudo -u engoal python3.12 -m venv /opt/engoal/venv
-sudo -u engoal /opt/engoal/venv/bin/pip install --upgrade pip
-sudo -u engoal /opt/engoal/venv/bin/pip install -r /opt/engoal/backend/requirements.txt
+sudo -u engoal_lite python3.12 -m venv /opt/engoal_lite/venv
+sudo -u engoal_lite /opt/engoal_lite/venv/bin/pip install --upgrade pip
+sudo -u engoal_lite /opt/engoal_lite/venv/bin/pip install -r /opt/engoal_lite/backend/requirements.txt
 
 # Frontend
-cd /opt/engoal/frontend
-sudo -u engoal npm ci --production=false   # Need devDeps for build
-sudo -u engoal npm run build
+cd /opt/engoal_lite/frontend
+sudo -u engoal_lite npm ci --production=false   # Need devDeps for build
+sudo -u engoal_lite npm run build
 ```
 
 #### Step 10: Configure Environment Variables
 
-Create `/opt/engoal/backend/.env` and `/opt/engoal/frontend/.env.local` with values from Section 5. Set permissions:
+Create `/opt/engoal_lite/backend/.env` and `/opt/engoal_lite/frontend/.env.local` with values from Section 5. Set permissions:
 
 ```bash
-chmod 600 /opt/engoal/backend/.env /opt/engoal/frontend/.env.local
-chown engoal:engoal /opt/engoal/backend/.env /opt/engoal/frontend/.env.local
+chmod 600 /opt/engoal_lite/backend/.env /opt/engoal_lite/frontend/.env.local
+chown engoal_lite:engoal_lite /opt/engoal_lite/backend/.env /opt/engoal_lite/frontend/.env.local
 ```
 
 #### Step 11: Run Database Migrations
 
 ```bash
-sudo -u engoal bash -c '
-    source /opt/engoal/venv/bin/activate
-    cd /opt/engoal/backend
+sudo -u engoal_lite bash -c '
+    source /opt/engoal_lite/venv/bin/activate
+    cd /opt/engoal_lite/backend
     export $(grep -v "^#" .env | xargs)
     alembic upgrade head
 '
@@ -1161,31 +1161,31 @@ sudo -u engoal bash -c '
 ```bash
 # Copy service files (see Section 8)
 systemctl daemon-reload
-systemctl enable engoal-backend engoal-frontend
-systemctl start engoal-backend engoal-frontend
+systemctl enable engoal_lite-backend engoal_lite-frontend
+systemctl start engoal_lite-backend engoal_lite-frontend
 ```
 
 #### Step 13: Configure Nginx and SSL
 
 ```bash
 # Copy Nginx config (see Section 3)
-ln -s /etc/nginx/sites-available/engoal /etc/nginx/sites-enabled/engoal
+ln -s /etc/nginx/sites-available/engoal_lite /etc/nginx/sites-enabled/engoal_lite
 rm -f /etc/nginx/sites-enabled/default
 nginx -t && systemctl reload nginx
 
 # Get SSL cert (ensure DNS points to this Droplet first)
-certbot --nginx -d engoal.example.com --non-interactive --agree-tos -m your-email@example.com
+certbot --nginx -d engoal-lite.example.com --non-interactive --agree-tos -m your-email@example.com
 ```
 
 #### Step 14: Smoke Test
 
 ```bash
 # From the Droplet
-curl -I https://engoal.example.com
-curl -I https://engoal.example.com/api/health
+curl -I https://engoal-lite.example.com
+curl -I https://engoal-lite.example.com/api/health
 
 # From the Mac Mini
-curl -I https://engoal.example.com
+curl -I https://engoal-lite.example.com
 ```
 
 Expected: HTTP 200 for both endpoints, valid TLS certificate, security headers present.
@@ -1290,27 +1290,27 @@ jobs:
           script: |
             set -euo pipefail
 
-            APP_DIR="/opt/engoal"
-            REPO_URL="git@github.com:edwin-maljames/engoal.git"
+            APP_DIR="/opt/engoal_lite"
+            REPO_URL="git@github.com:edwin-maljames/engoal_lite.git"
 
             # Pull latest code to a staging area
             cd /tmp
-            rm -rf engoal-deploy
-            git clone --depth 1 --branch main "${REPO_URL}" engoal-deploy
+            rm -rf engoal_lite-deploy
+            git clone --depth 1 --branch main "${REPO_URL}" engoal_lite-deploy
 
             # --- Backend deployment ---
             sudo rsync -a --delete \
               --exclude='.env' \
               --exclude='__pycache__' \
               --exclude='.pytest_cache' \
-              /tmp/engoal-deploy/backend/ "${APP_DIR}/backend/"
+              /tmp/engoal_lite-deploy/backend/ "${APP_DIR}/backend/"
 
-            sudo chown -R engoal:engoal "${APP_DIR}/backend"
+            sudo chown -R engoal_lite:engoal_lite "${APP_DIR}/backend"
 
-            sudo -u engoal "${APP_DIR}/venv/bin/pip" install -q -r "${APP_DIR}/backend/requirements.txt"
+            sudo -u engoal_lite "${APP_DIR}/venv/bin/pip" install -q -r "${APP_DIR}/backend/requirements.txt"
 
             # Run migrations
-            sudo -u engoal bash -c "
+            sudo -u engoal_lite bash -c "
               source ${APP_DIR}/venv/bin/activate
               cd ${APP_DIR}/backend
               export \$(grep -v '^#' .env | xargs)
@@ -1322,22 +1322,22 @@ jobs:
               --exclude='.env.local' \
               --exclude='node_modules' \
               --exclude='.next' \
-              /tmp/engoal-deploy/frontend/ "${APP_DIR}/frontend/"
+              /tmp/engoal_lite-deploy/frontend/ "${APP_DIR}/frontend/"
 
-            sudo chown -R engoal:engoal "${APP_DIR}/frontend"
+            sudo chown -R engoal_lite:engoal_lite "${APP_DIR}/frontend"
 
             cd "${APP_DIR}/frontend"
-            sudo -u engoal npm ci --production=false
-            sudo -u engoal npm run build
+            sudo -u engoal_lite npm ci --production=false
+            sudo -u engoal_lite npm run build
 
             # --- Restart services (rolling: frontend first, then backend) ---
-            sudo systemctl restart engoal-frontend
+            sudo systemctl restart engoal_lite-frontend
             sleep 3
-            sudo systemctl restart engoal-backend
+            sudo systemctl restart engoal_lite-backend
             sleep 3
 
             # --- Verify services are running ---
-            for svc in engoal-backend engoal-frontend; do
+            for svc in engoal_lite-backend engoal_lite-frontend; do
               if ! systemctl is-active --quiet "${svc}"; then
                 echo "ERROR: ${svc} failed to start after deploy"
                 sudo journalctl -u "${svc}" --no-pager -n 20
@@ -1359,7 +1359,7 @@ jobs:
             done
 
             # Cleanup
-            rm -rf /tmp/engoal-deploy
+            rm -rf /tmp/engoal_lite-deploy
 
             echo "Deployment completed successfully at $(date -u)"
 ```
@@ -1382,30 +1382,30 @@ If you need to restore the database from a backup:
 
 ```bash
 # 1. Stop the application to prevent writes during restore
-sudo systemctl stop engoal-backend
+sudo systemctl stop engoal_lite-backend
 
 # 2. List available backups
-ls -lah /var/backups/engoal/daily/
+ls -lah /var/backups/engoal_lite/daily/
 
 # 3. Drop and recreate the database
 sudo -u postgres psql <<'SQL'
 -- Terminate any remaining connections
 SELECT pg_terminate_backend(pid) FROM pg_stat_activity
-WHERE datname = 'engoal_db' AND pid <> pg_backend_pid();
+WHERE datname = 'engoal_lite_db' AND pid <> pg_backend_pid();
 
-DROP DATABASE engoal_db;
-CREATE DATABASE engoal_db OWNER engoal_user ENCODING 'UTF8' TEMPLATE template0;
+DROP DATABASE engoal_lite_db;
+CREATE DATABASE engoal_lite_db OWNER engoal_lite_user ENCODING 'UTF8' TEMPLATE template0;
 SQL
 
 # 4. Restore from the backup file
-gunzip -c /var/backups/engoal/daily/engoal_db_2026-02-22_020000.sql.gz | \
-    sudo -u engoal psql -h 127.0.0.1 -U engoal_user -d engoal_db
+gunzip -c /var/backups/engoal_lite/daily/engoal_lite_db_2026-02-22_020000.sql.gz | \
+    sudo -u engoal_lite psql -h 127.0.0.1 -U engoal_lite_user -d engoal_lite_db
 
 # 5. Verify the restore
-sudo -u engoal psql -h 127.0.0.1 -U engoal_user -d engoal_db -c "\dt"
+sudo -u engoal_lite psql -h 127.0.0.1 -U engoal_lite_user -d engoal_lite_db -c "\dt"
 
 # 6. Restart the application
-sudo systemctl start engoal-backend
+sudo systemctl start engoal_lite-backend
 
 # 7. Run a health check
 curl -s http://127.0.0.1:8000/api/health
@@ -1456,10 +1456,10 @@ Add to the backup script:
 
 ```bash
 # After the local pg_dump, upload to Spaces
-s3cmd put "${BACKUP_FILE}" s3://engoal-backups/daily/
+s3cmd put "${BACKUP_FILE}" s3://engoal_lite-backups/daily/
 
 # Or use DigitalOcean's CLI
-doctl storage object put engoal-backups "${BACKUP_FILE}" --region nyc1
+doctl storage object put engoal_lite-backups "${BACKUP_FILE}" --region nyc1
 ```
 
 Cost: ~$5/month for 250 GB of Spaces storage.
@@ -1470,7 +1470,7 @@ Add a cron job on the Mac Mini that pulls the latest backup:
 
 ```bash
 # On Mac Mini crontab (runs daily at 03:00)
-0 3 * * * scp -P 2222 deploy@engoal:/var/backups/engoal/daily/$(date +\%Y-\%m-\%d)*.sql.gz ~/backups/engoal/
+0 3 * * * scp -P 2222 deploy@engoal_lite:/var/backups/engoal_lite/daily/$(date +\%Y-\%m-\%d)*.sql.gz ~/backups/engoal_lite/
 ```
 
 **Option C: DigitalOcean Droplet Snapshots**
@@ -1483,12 +1483,12 @@ Enable weekly automated snapshots in the DigitalOcean dashboard. Cost: 20% of th
 
 ```bash
 # --- Service Management ---
-sudo systemctl status engoal-backend     # Check backend status
-sudo systemctl status engoal-frontend    # Check frontend status
-sudo systemctl restart engoal-backend    # Restart backend
-sudo systemctl restart engoal-frontend   # Restart frontend
-sudo journalctl -u engoal-backend -f    # Tail backend logs (systemd journal)
-sudo journalctl -u engoal-frontend -f   # Tail frontend logs
+sudo systemctl status engoal_lite-backend     # Check backend status
+sudo systemctl status engoal_lite-frontend    # Check frontend status
+sudo systemctl restart engoal_lite-backend    # Restart backend
+sudo systemctl restart engoal_lite-frontend   # Restart frontend
+sudo journalctl -u engoal_lite-backend -f    # Tail backend logs (systemd journal)
+sudo journalctl -u engoal_lite-frontend -f   # Tail frontend logs
 
 # --- Nginx ---
 sudo nginx -t                            # Test config
@@ -1497,7 +1497,7 @@ sudo tail -f /var/log/nginx/access.log   # Tail access log
 
 # --- PostgreSQL ---
 sudo -u postgres psql                    # Connect as postgres superuser
-sudo -u engoal psql -h 127.0.0.1 -U engoal_user -d engoal_db  # Connect as app user
+sudo -u engoal_lite psql -h 127.0.0.1 -U engoal_lite_user -d engoal_lite_db  # Connect as app user
 
 # --- SSL ---
 sudo certbot certificates                # List certificates and expiry
@@ -1508,9 +1508,9 @@ sudo ufw status verbose                  # Show rules
 sudo fail2ban-client status sshd         # Show banned IPs
 
 # --- Backups ---
-ls -lah /var/backups/engoal/daily/       # List backups
-/opt/engoal/scripts/backup_db.sh         # Run manual backup
+ls -lah /var/backups/engoal_lite/daily/       # List backups
+/opt/engoal_lite/scripts/backup_db.sh         # Run manual backup
 
 # --- Health ---
-/opt/engoal/scripts/health_check.sh      # Full health check
+/opt/engoal_lite/scripts/health_check.sh      # Full health check
 ```

@@ -1,4 +1,4 @@
-# Engoal -- Technical Design Document
+# Engoal-lite -- Technical Design Document
 
 **Version:** 1.0
 **Date:** 2026-02-22
@@ -25,12 +25,12 @@
 
 ### 1.1 System Context
 
-Engoal is a solo-user personal financial planning application. It tracks investments across multiple asset classes (Equity MFs, Debt MFs, Fixed Deposits, Gold, Real Estate), links them to financial goals, and uses a RAG (Red/Amber/Green) status system to show whether the user is on track to meet each goal.
+Engoal-lite is a solo-user personal financial planning application. It tracks investments across multiple asset classes (Equity MFs, Debt MFs, Fixed Deposits, Gold, Real Estate), links them to financial goals, and uses a RAG (Red/Amber/Green) status system to show whether the user is on track to meet each goal.
 
 ### 1.2 Monorepo Structure
 
 ```
-Engoal/
+Engoal-lite/
 ├── frontend/                 # Next.js 15 App Router (TypeScript)
 │   ├── src/
 │   │   ├── app/              # App Router pages and layouts
@@ -79,7 +79,7 @@ Engoal/
 │   └── workflows/
 │       └── ci.yml            # CI pipeline
 ├── CLAUDE.md                 # Project-level Claude Code rules
-└── engoal_technical_design.md
+└── engoal_lite_technical_design.md
 ```
 
 ### 1.3 Request Flow
@@ -874,7 +874,7 @@ Aggregated view of all goals, investments, and RAG statuses.
 
 ### 5.1 Core Concept
 
-For each goal, Engoal projects the future value of every linked investment using compound growth at the investment's expected CAGR. The sum of all projected values is compared against the goal's target amount to produce a Red/Amber/Green status.
+For each goal, Engoal-lite projects the future value of every linked investment using compound growth at the investment's expected CAGR. The sum of all projected values is compared against the goal's target amount to produce a Red/Amber/Green status.
 
 ### 5.2 Future Value Formula
 
@@ -1231,7 +1231,7 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=[
         "http://localhost:3000",      # Next.js dev server
-        "https://engoal.example.com", # Production domain
+        "https://engoal-lite.example.com", # Production domain
     ],
     allow_credentials=True,
     allow_methods=["GET", "POST", "PUT", "DELETE"],
@@ -2042,7 +2042,7 @@ def register_exception_handlers(app: FastAPI) -> None:
     ) -> JSONResponse:
         # Log the full traceback for debugging
         import logging
-        logger = logging.getLogger("engoal")
+        logger = logging.getLogger("engoal_lite")
         logger.exception("Unhandled exception", exc_info=exc)
 
         return JSONResponse(
@@ -2227,7 +2227,7 @@ from app.db.base import Base
 from app.core.deps import get_db
 from app.core.security import hash_password
 
-TEST_DATABASE_URL = "postgresql+asyncpg://test:test@localhost:5433/engoal_test"
+TEST_DATABASE_URL = "postgresql+asyncpg://test:test@localhost:5433/engoal_lite_test"
 
 
 @pytest.fixture(scope="session")
@@ -2276,7 +2276,7 @@ async def test_user(db_session):
     from app.models.user import User
 
     user = User(
-        email="test@engoal.app",
+        email="test@engoal-lite.app",
         hashed_password=hash_password("TestPass123!"),
         full_name="Test User",
     )
@@ -2288,7 +2288,7 @@ async def test_user(db_session):
 @pytest.fixture
 async def auth_headers(client, test_user):
     response = await client.post("/auth/login", json={
-        "email": "test@engoal.app",
+        "email": "test@engoal-lite.app",
         "password": "TestPass123!",
     })
     token = response.json()["access_token"]
@@ -2649,7 +2649,7 @@ test.describe("Goal Management", () => {
   test.beforeEach(async ({ page }) => {
     // Login
     await page.goto("/login");
-    await page.fill('[name="email"]', "test@engoal.app");
+    await page.fill('[name="email"]', "test@engoal-lite.app");
     await page.fill('[name="password"]', "TestPass123!");
     await page.click('button[type="submit"]');
     await page.waitForURL("/dashboard");
@@ -2740,7 +2740,7 @@ jobs:
         env:
           POSTGRES_USER: test
           POSTGRES_PASSWORD: test
-          POSTGRES_DB: engoal_test
+          POSTGRES_DB: engoal_lite_test
         ports:
           - 5433:5432
         options: >-
@@ -2768,7 +2768,7 @@ jobs:
       - name: Test (pytest)
         working-directory: backend
         env:
-          DATABASE_URL: postgresql+asyncpg://test:test@localhost:5433/engoal_test
+          DATABASE_URL: postgresql+asyncpg://test:test@localhost:5433/engoal_lite_test
         run: uv run pytest -v --cov=app --cov-report=xml
 
   frontend:
@@ -2808,7 +2808,7 @@ jobs:
 # backend/.env (NEVER committed to git)
 
 # Database
-DATABASE_URL=postgresql+asyncpg://engoal:secret@localhost:5432/engoal
+DATABASE_URL=postgresql+asyncpg://engoal_lite:secret@localhost:5432/engoal_lite
 
 # JWT
 JWT_SECRET_KEY=<random-64-char-hex>
@@ -2843,15 +2843,15 @@ services:
   db:
     image: postgres:16-alpine
     environment:
-      POSTGRES_USER: engoal
+      POSTGRES_USER: engoal_lite
       POSTGRES_PASSWORD: secret
-      POSTGRES_DB: engoal
+      POSTGRES_DB: engoal_lite
     ports:
       - "5432:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-ONLY", "pg_isready", "-U", "engoal"]
+      test: ["CMD-ONLY", "pg_isready", "-U", "engoal_lite"]
       interval: 5s
       timeout: 3s
       retries: 5
@@ -2861,7 +2861,7 @@ services:
     environment:
       POSTGRES_USER: test
       POSTGRES_PASSWORD: test
-      POSTGRES_DB: engoal_test
+      POSTGRES_DB: engoal_lite_test
     ports:
       - "5433:5432"
 

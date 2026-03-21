@@ -35,22 +35,11 @@ def upgrade() -> None:
     # ------------------------------------------------------------------
     # Enum types
     # ------------------------------------------------------------------
-    asset_class = postgresql.ENUM(
-        "equity_mf",
-        "debt_mf",
-        "fixed_deposit",
-        "gold",
-        "real_estate",
-        "smallcase",
-        name="asset_class",
-    )
-    asset_class.create(op.get_bind(), checkfirst=True)
-
+    # rag_status is not used in any column definition so must be created explicitly
     rag_status = postgresql.ENUM("green", "amber", "red", name="rag_status")
     rag_status.create(op.get_bind(), checkfirst=True)
-
-    goal_status = postgresql.ENUM("active", "achieved", "abandoned", name="goal_status")
-    goal_status.create(op.get_bind(), checkfirst=True)
+    # asset_class and goal_status are created automatically by sa.Enum when their
+    # tables are created below — no explicit create() needed.
 
     # ------------------------------------------------------------------
     # Table: users

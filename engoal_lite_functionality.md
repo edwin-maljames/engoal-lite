@@ -1,4 +1,4 @@
-# Engoal — Functional Specification
+# Engoal-lite — Functional Specification
 
 > **Version:** 1.0
 > **Date:** 2026-02-22
@@ -19,7 +19,7 @@
 
 ## 1. Overview
 
-Engoal is a personal financial goal-tracking application for a single user managing their investments in Indian Rupees (INR). The app allows the user to define financial goals (e.g., "Retirement corpus," "Child's education," "House down payment"), link real investments to those goals, and track progress month by month.
+Engoal-lite is a personal financial goal-tracking application for a single user managing their investments in Indian Rupees (INR). The app allows the user to define financial goals (e.g., "Retirement corpus," "Child's education," "House down payment"), link real investments to those goals, and track progress month by month.
 
 **How it works in plain English:**
 

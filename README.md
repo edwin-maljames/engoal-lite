@@ -19,9 +19,9 @@ Personal Financial Planning App — built on the Alteeza Lab agentic stack.
 
 ### Prerequisites
 
-- Docker and Docker Compose
-- Node.js 24+ (for frontend work outside Docker)
-- Python 3.12+ and [uv](https://docs.astral.sh/uv/) (for backend work outside Docker)
+- **PostgreSQL 16+** installed locally (no Docker needed for dev)
+- Node.js 24+
+- Python 3.12+ and [uv](https://docs.astral.sh/uv/)
 
 ### 1. Clone the repository
 
@@ -30,19 +30,35 @@ git clone git@github.com:edwin-maljames/Engoal-lite.git
 cd Engoal-lite
 ```
 
-### 2. Configure environment variables
+### 2. One-time local database setup
+
+Create the dev database (run once):
+
+```bash
+createdb engoal_lite_dev
+```
+
+For running integration/E2E tests locally, also create the test database:
+
+```bash
+createuser -s test_user
+psql postgres -c "ALTER USER test_user WITH PASSWORD 'test_pwd';"
+createdb -O test_user engoal_lite_test
+```
+
+### 3. Configure environment variables
 
 ```bash
 # Backend
 cp backend/.env.example backend/.env
-# Edit backend/.env with your local values
+# Edit backend/.env — set DATABASE_URL and SECRET_KEY
 
 # Frontend
-cp frontend/.env.example frontend/.env.local
-# Edit frontend/.env.local with your local values
+cp frontend/.env.local.example frontend/.env.local
+# Edit frontend/.env.local if needed
 ```
 
-Required variables — see `.env.example` files at each layer for full list:
+Required variables:
 
 | Variable | Location | Purpose |
 |----------|----------|---------|
@@ -50,38 +66,30 @@ Required variables — see `.env.example` files at each layer for full list:
 | `SECRET_KEY` | `backend/.env` | JWT signing secret |
 | `NEXT_PUBLIC_API_URL` | `frontend/.env.local` | Backend API base URL |
 
-### 3. Start with Docker Compose (recommended)
+Dev `DATABASE_URL` format:
 
-```bash
-docker compose up
+```
+DATABASE_URL=postgresql+asyncpg://<your-mac-username>@localhost:5432/engoal_lite_dev
 ```
 
-This starts:
-- **PostgreSQL 16** on `localhost:5432`
-- **FastAPI backend** on `localhost:8000`
-- **Next.js frontend** on `localhost:3000`
-
-The backend runs with `--reload` and the frontend volume-mounts source for hot reload.
-
-### 4. Start manually (alternative)
-
-If you prefer running services outside Docker:
+### 4. Start the application
 
 ```bash
-# Terminal 1 — Start the test/dev database
-docker compose -f docker-compose.test.yml up
-
-# Terminal 2 — Backend
+# Terminal 1 — Backend
 cd backend
 uv sync
-uv run alembic upgrade head
+uv run alembic upgrade head        # creates all tables on first run
 uv run uvicorn app.main:app --reload --port 8000
 
-# Terminal 3 — Frontend
+# Terminal 2 — Frontend
 cd frontend
 npm install
 npm run dev
 ```
+
+- Backend: http://localhost:8000
+- Frontend: http://localhost:3000
+- API docs: http://localhost:8000/api/docs
 
 ---
 
@@ -89,14 +97,13 @@ npm run dev
 
 ### Backend
 
+Integration tests run against your local `engoal_lite_test` Postgres database (no Docker):
+
 ```bash
 cd backend
 
-# Start the test database (port 5433 — separate from dev DB)
-docker compose -f ../docker-compose.test.yml up -d
-
 # Run the full suite
-DATABASE_URL=postgresql://engoal_lite_test:test_password@localhost:5433/engoal_lite_test \
+DATABASE_URL=postgresql://test_user:test_pwd@localhost:5432/engoal_lite_test \
   uv run pytest tests/ -v --tb=short --cov=app --cov-report=term-missing
 
 # Lint and type-check
@@ -142,8 +149,11 @@ npm run lint && npm run build && npx vitest run
 | Workflow | Trigger | What it does |
 |----------|---------|--------------|
 | `ci-frontend.yml` | PR to `main` (frontend changes) | ESLint · tsc · Vitest · next build · Playwright |
-| `ci-backend.yml` | PR to `main` (backend changes) | ruff · mypy · pytest (with Postgres service) |
+| `ci-backend.yml` | PR to `main` (backend changes) | ruff · mypy · pytest (with Postgres service via Docker) |
 | `deploy.yml` | Push to `main` | SSH deploy to DigitalOcean Droplet |
+
+> CI uses `docker-compose.test.yml` to spin up a Postgres test database on port 5433.
+> Locally you use your installed Postgres on port 5432 instead.
 
 ### Deploy flow
 
@@ -165,7 +175,7 @@ On every merge to `main`, the deploy workflow:
 
 ### Health endpoint
 
-`GET /api/health` — returns `200 OK` with DB status. Used by deploy workflow to verify the stack is up after each deploy.
+`GET /api/v1/health` — returns `200 OK` with version info. Used by deploy workflow to verify the stack is up after each deploy.
 
 ---
 
@@ -190,8 +200,7 @@ Engoal-lite/
 │   ├── tests/
 │   ├── e2e/
 │   └── package.json
-├── docker-compose.yml         # Local dev stack
-├── docker-compose.test.yml    # Test database only (port 5433)
+├── docker-compose.test.yml    # Test database for CI (port 5433)
 ├── .gitignore
 └── README.md
 ```
