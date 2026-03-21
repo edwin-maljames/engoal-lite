@@ -1,13 +1,8 @@
 """
 Shared pytest fixtures for unit and integration tests.
 
-Requires a running PostgreSQL instance:
-  postgresql+asyncpg://test:test@localhost:5433/engoal_lite_test
-
-Start one with Docker:
-  docker run -d --name engoal-test-db \
-    -e POSTGRES_USER=test -e POSTGRES_PASSWORD=test -e POSTGRES_DB=engoal_lite_test \
-    -p 5433:5432 postgres:16
+Uses SQLite in-memory — no external database required.
+E2E tests (post-merge) use Postgres via backend/.env.test.
 """
 
 from __future__ import annotations
@@ -31,7 +26,7 @@ if TYPE_CHECKING:
 # ---------------------------------------------------------------------------
 TEST_DATABASE_URL = os.environ.get(
     "TEST_DATABASE_URL",
-    "postgresql+asyncpg://test:test@localhost:5433/engoal_lite_test",
+    "sqlite+aiosqlite:///:memory:",
 )
 
 # Ensure config picks up the test DB before importing anything that triggers settings
@@ -60,7 +55,12 @@ async def engine() -> AsyncGenerator[Any, None]:
     import app.models  # noqa: F401 — register all models
     from app.db.base import Base
 
-    _engine = create_async_engine(TEST_DATABASE_URL, echo=False)
+    _is_sqlite = TEST_DATABASE_URL.startswith("sqlite")
+    _engine = create_async_engine(
+        TEST_DATABASE_URL,
+        echo=False,
+        **({} if _is_sqlite else {"pool_pre_ping": True}),
+    )
     async with _engine.begin() as conn:
         await conn.run_sync(Base.metadata.drop_all)
         await conn.run_sync(Base.metadata.create_all)

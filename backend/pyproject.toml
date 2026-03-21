@@ -16,6 +16,7 @@ dependencies = [
     "slowapi>=0.1.9",
     "python-multipart>=0.0.12",
     "httpx>=0.28.0",
+    "aiosqlite>=0.22.1",
 ]
 
 [dependency-groups]
