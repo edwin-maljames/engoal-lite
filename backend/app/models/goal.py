@@ -41,7 +41,7 @@ class Goal(TimestampMixin, Base):
     target_amount: Mapped[Decimal] = mapped_column(Numeric(15, 2), nullable=False)
     target_date: Mapped[date] = mapped_column(Date, nullable=False)
     status: Mapped[GoalStatus] = mapped_column(
-        Enum(GoalStatus, name="goal_status"),
+        Enum(GoalStatus, name="goal_status", values_callable=lambda e: [x.value for x in e]),
         nullable=False,
         default=GoalStatus.ACTIVE,
     )

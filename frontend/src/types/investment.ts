@@ -2,18 +2,18 @@ import type { AssetClass } from "./goal";
 
 export interface Investment {
   id: string;
+  goal_id: string;
+  goal_name: string;
   name: string;
   asset_class: AssetClass;
   expected_cagr: number;
-  start_date: string;
   is_active: boolean;
-  latest_total_invested: number;
-  latest_current_value: number;
-  unrealized_gain: number;
-  absolute_return_pct: number;
+  latest_total_invested: number | null;
+  latest_current_value: number | null;
+  unrealized_gain: number | null;
+  absolute_return_pct: number | null;
   latest_entry_month: string | null;
   notes: string | null;
-  linked_goals: LinkedGoal[];
   created_at: string;
   updated_at: string;
 }
@@ -33,10 +33,10 @@ export interface GoalInvestmentLink {
 }
 
 export interface InvestmentCreate {
+  goal_id: string;
   name: string;
   asset_class: AssetClass;
   expected_cagr: number;
-  start_date: string;
   notes?: string;
 }
 
@@ -45,7 +45,6 @@ export interface InvestmentUpdate {
   expected_cagr?: number;
   is_active?: boolean;
   notes?: string;
-  start_date?: string;
 }
 
 export interface LinkInvestmentToGoal {

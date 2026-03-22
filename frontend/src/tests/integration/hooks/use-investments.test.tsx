@@ -43,14 +43,15 @@ describe("useInvestments", () => {
     expect(assetClasses).toContain("smallcase");
   });
 
-  it("investment has linked_goals array", async () => {
+  it("investment has goal_id and goal_name", async () => {
     const wrapper = createWrapper();
     const { result } = renderHook(() => useInvestments(), { wrapper });
 
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
 
     const firstInv = result.current.data?.investments[0];
-    expect(firstInv).toHaveProperty("linked_goals");
-    expect(Array.isArray(firstInv?.linked_goals)).toBe(true);
+    expect(firstInv).toHaveProperty("goal_id");
+    expect(firstInv).toHaveProperty("goal_name");
+    expect(typeof firstInv?.goal_name).toBe("string");
   });
 });

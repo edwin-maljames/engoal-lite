@@ -6,6 +6,7 @@ import { useEffect } from "react";
 import { useForm, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useCreateInvestment, useUpdateInvestment } from "@/hooks/use-investments";
+import { useGoals } from "@/hooks/use-goals";
 import { investmentSchema, type InvestmentInput } from "@/lib/validators";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -19,12 +20,14 @@ import type { Investment } from "@/types";
 interface InvestmentFormProps {
   investment?: Investment;
   investmentId?: string;
+  goalId?: string;
 }
 
-export function InvestmentForm({ investment, investmentId }: InvestmentFormProps): React.JSX.Element {
+export function InvestmentForm({ investment, investmentId, goalId }: InvestmentFormProps): React.JSX.Element {
   const router = useRouter();
   const { mutateAsync: createInvestment, isPending: isCreating } = useCreateInvestment();
   const { mutateAsync: updateInvestment, isPending: isUpdating } = useUpdateInvestment(investmentId ?? "");
+  const { data: goalsData } = useGoals("active");
 
   const isEditing = !!investmentId;
   const isPending = isCreating || isUpdating;
@@ -39,10 +42,10 @@ export function InvestmentForm({ investment, investmentId }: InvestmentFormProps
   } = useForm<InvestmentInput>({
     resolver: zodResolver(investmentSchema),
     defaultValues: {
+      goal_id: goalId ?? "",
       name: investment?.name ?? "",
       asset_class: investment?.asset_class ?? "equity_mf",
       expected_cagr: investment?.expected_cagr ?? ASSET_CLASS_DEFAULT_CAGR["equity_mf"],
-      start_date: investment?.start_date ?? new Date().toISOString().split("T")[0],
       notes: investment?.notes ?? "",
     },
   });
@@ -61,7 +64,9 @@ export function InvestmentForm({ investment, investmentId }: InvestmentFormProps
 
   async function onSubmit(data: InvestmentInput): Promise<void> {
     if (isEditing) {
-      await updateInvestment(data);
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+      const { goal_id, ...updateData } = data;
+      await updateInvestment(updateData);
       router.push(`/investments/${investmentId}`);
     } else {
       const newInv = await createInvestment(data);
@@ -69,10 +74,37 @@ export function InvestmentForm({ investment, investmentId }: InvestmentFormProps
     }
   }
 
+  const goals = goalsData?.goals ?? [];
+
   return (
     <Card className="max-w-2xl">
       <CardContent className="pt-6">
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-5">
+          {!isEditing && (
+            <div className="space-y-1.5">
+              <Label htmlFor="goal_id">Goal *</Label>
+              <Controller
+                name="goal_id"
+                control={control}
+                render={({ field }) => (
+                  <Select value={field.value} onValueChange={field.onChange}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select a goal" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {goals.map((g) => (
+                        <SelectItem key={g.id} value={g.id}>
+                          {g.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                )}
+              />
+              {errors.goal_id && <p className="text-xs text-red-600">{errors.goal_id.message}</p>}
+            </div>
+          )}
+
           <div className="space-y-1.5">
             <Label htmlFor="name">Investment Name *</Label>
             <Input
@@ -124,17 +156,6 @@ export function InvestmentForm({ investment, investmentId }: InvestmentFormProps
               )}
               {errors.expected_cagr && <p className="text-xs text-red-600">{errors.expected_cagr.message}</p>}
             </div>
-          </div>
-
-          <div className="space-y-1.5">
-            <Label htmlFor="start_date">Start Date *</Label>
-            <Input
-              id="start_date"
-              type="date"
-              max={new Date().toISOString().split("T")[0]}
-              {...register("start_date")}
-            />
-            {errors.start_date && <p className="text-xs text-red-600">{errors.start_date.message}</p>}
           </div>
 
           <div className="space-y-1.5">

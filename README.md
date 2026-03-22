@@ -19,9 +19,9 @@ Personal Financial Planning App — built on the Alteeza Lab agentic stack.
 
 ### Prerequisites
 
-- **Python 3.12+** and [uv](https://docs.astral.sh/uv/)
-- **Node.js 24+**
-- **PostgreSQL 16+** — only needed for E2E tests (not required for dev or unit/integration tests)
+- **PostgreSQL 16+** installed locally (no Docker needed for dev)
+- Node.js 24+
+- Python 3.12+ and [uv](https://docs.astral.sh/uv/)
 
 ### 1. Clone the repository
 
@@ -30,17 +30,35 @@ git clone git@github.com:edwin-maljames/Engoal-lite.git
 cd Engoal-lite
 ```
 
-### 2. Configure environment variables
+### 2. One-time local database setup
+
+Create the dev database (run once):
+
+```bash
+createdb engoal_lite_dev
+```
+
+For running integration/E2E tests locally, also create the test database:
+
+```bash
+createuser -s test_user
+psql postgres -c "ALTER USER test_user WITH PASSWORD 'test_pwd';"
+createdb -O test_user engoal_lite_test
+```
+
+### 3. Configure environment variables
 
 ```bash
 # Backend
 cp backend/.env.example backend/.env
-# Edit backend/.env — set SECRET_KEY (DATABASE_URL defaults to SQLite)
+# Edit backend/.env — set DATABASE_URL and SECRET_KEY
 
 # Frontend
 cp frontend/.env.local.example frontend/.env.local
+# Edit frontend/.env.local if needed
 ```
 
+Required variables:
 Required variables:
 
 | Variable | Location | Dev default |
@@ -49,15 +67,23 @@ Required variables:
 | `SECRET_KEY` | `backend/.env` | Generate with `openssl rand -hex 32` |
 | `NEXT_PUBLIC_API_URL` | `frontend/.env.local` | `http://localhost:8000/api` |
 
-### 3. Start the application
+Dev `DATABASE_URL` format:
+
+```
+DATABASE_URL=postgresql+asyncpg://<your-mac-username>@localhost:5432/engoal_lite_dev
+```
+
+### 4. Start the application
 
 ```bash
 # Terminal 1 — Backend
 cd backend
 uv sync
 uv run alembic upgrade head        # creates all tables on first run
+uv run alembic upgrade head        # creates all tables on first run
 uv run uvicorn app.main:app --reload --port 8000
 
+# Terminal 2 — Frontend
 # Terminal 2 — Frontend
 cd frontend
 npm install
@@ -80,19 +106,24 @@ psql -c "ALTER USER test_user WITH PASSWORD 'test_pwd';"
 createdb -O test_user engoal_lite_test
 ```
 
+- Backend: http://localhost:8000
+- Frontend: http://localhost:3000
+- API docs: http://localhost:8000/api/docs
+
 ---
 
 ## Running Tests
 
 ### Backend
 
-Unit and integration tests run against **SQLite in-memory** (no database setup needed):
+Integration tests run against your local `engoal_lite_test` Postgres database (no Docker):
 
 ```bash
 cd backend
 
 # Run the full suite
-uv run pytest tests/ -v --tb=short --cov=app --cov-report=term-missing
+DATABASE_URL=postgresql://test_user:test_pwd@localhost:5432/engoal_lite_test \
+  uv run pytest tests/ -v --tb=short --cov=app --cov-report=term-missing
 
 # Lint and type-check
 uv run ruff check .
@@ -138,10 +169,11 @@ npm run lint && npm run build && npx vitest run
 |----------|---------|--------------|
 | `ci-frontend.yml` | PR to `main` (frontend changes) | ESLint · tsc · Vitest · next build · Playwright |
 | `ci-backend.yml` | PR to `main` (backend changes) | ruff · mypy · pytest (with Postgres service via Docker) |
+| `ci-backend.yml` | PR to `main` (backend changes) | ruff · mypy · pytest (with Postgres service via Docker) |
 | `deploy.yml` | Push to `main` | SSH deploy to DigitalOcean Droplet |
 
 > CI uses `docker-compose.test.yml` to spin up a Postgres test database on port 5433.
-> Locally, unit/integration tests use SQLite in-memory instead.
+> Locally you use your installed Postgres on port 5432 instead.
 
 ### Deploy flow
 
@@ -163,6 +195,7 @@ On every merge to `main`, the deploy workflow:
 
 ### Health endpoint
 
+`GET /api/v1/health` — returns `200 OK` with version info. Used by deploy workflow to verify the stack is up after each deploy.
 `GET /api/v1/health` — returns `200 OK` with version info. Used by deploy workflow to verify the stack is up after each deploy.
 
 ---
@@ -187,7 +220,7 @@ Engoal-lite/
 │   ├── src/
 │   │   └── tests/         # Vitest unit + integration tests
 │   └── package.json
-├── docker-compose.test.yml    # Test Postgres database (port 5433)
+├── docker-compose.test.yml    # Test database for CI (port 5433)
 ├── .gitignore
 └── README.md
 ```

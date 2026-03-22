@@ -90,7 +90,7 @@ export default function DashboardPage(): React.JSX.Element {
               value={dashboard?.summary.total_unrealized_gain ?? 0}
               showSign
               icon={<TrendingUp className="h-5 w-5 text-indigo-600" />}
-              subtitle={`${dashboard?.summary.overall_return_pct.toFixed(2) ?? "0"}% overall return`}
+              subtitle={`${(dashboard?.summary.overall_return_pct ?? 0).toFixed(2)}% overall return`}
             />
             <Card>
               <CardContent className="pt-6">
@@ -176,7 +176,7 @@ export default function DashboardPage(): React.JSX.Element {
                           )}
                         />
                         <p className="mt-1 text-right text-xs text-gray-500">
-                          {goal.progress_pct.toFixed(1)}%
+                          {(goal.progress_pct ?? 0).toFixed(1)}%
                         </p>
                       </div>
                     </Link>

@@ -160,17 +160,17 @@ export default function MonthlyEntryPage(): React.JSX.Element {
                           <Badge variant="outline" className="text-xs">{ASSET_CLASS_LABELS[inv.asset_class]}</Badge>
                         </td>
                         <td className="px-4 py-3 text-right font-mono text-gray-500 text-xs">
-                          {inv.latest_entry_month ? `₹${formatINR(inv.latest_current_value)}` : "—"}
+                          {inv.latest_entry_month ? `₹${formatINR(inv.latest_current_value ?? 0)}` : "—"}
                         </td>
                         <td className="px-4 py-3 text-right font-mono text-gray-500 text-xs">
-                          {inv.latest_entry_month ? `₹${formatINR(inv.latest_total_invested)}` : "—"}
+                          {inv.latest_entry_month ? `₹${formatINR(inv.latest_total_invested ?? 0)}` : "—"}
                         </td>
                         <td className="px-4 py-3 text-right">
                           <Input
                             type="number"
                             min={0}
                             step={1000}
-                            placeholder={inv.latest_total_invested > 0 ? String(inv.latest_total_invested) : "0"}
+                            placeholder={(inv.latest_total_invested ?? 0) > 0 ? String(inv.latest_total_invested) : "0"}
                             value={row?.total_invested ?? ""}
                             onChange={(e) => updateRow(inv.id, "total_invested", e.target.value)}
                             className="text-right w-40 ml-auto"
@@ -181,7 +181,7 @@ export default function MonthlyEntryPage(): React.JSX.Element {
                             type="number"
                             min={0}
                             step={1000}
-                            placeholder={inv.latest_current_value > 0 ? String(inv.latest_current_value) : "0"}
+                            placeholder={(inv.latest_current_value ?? 0) > 0 ? String(inv.latest_current_value) : "0"}
                             value={row?.current_value ?? ""}
                             onChange={(e) => updateRow(inv.id, "current_value", e.target.value)}
                             className="text-right w-40 ml-auto"

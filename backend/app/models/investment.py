@@ -46,7 +46,7 @@ class Investment(TimestampMixin, Base):
     )
     name: Mapped[str] = mapped_column(String(200), nullable=False)
     asset_class: Mapped[AssetClass] = mapped_column(
-        Enum(AssetClass, name="asset_class"),
+        Enum(AssetClass, name="asset_class", values_callable=lambda e: [x.value for x in e]),
         nullable=False,
     )
     # Annual expected CAGR — e.g. 12.50 means 12.50 %

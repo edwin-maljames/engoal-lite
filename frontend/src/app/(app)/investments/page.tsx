@@ -101,30 +101,30 @@ export default function InvestmentsPage(): React.JSX.Element {
                         <Badge variant="outline">{ASSET_CLASS_LABELS[inv.asset_class]}</Badge>
                       </td>
                       <td className="px-4 py-3 text-right font-mono">
-                        ₹{formatINR(inv.latest_current_value)}
+                        ₹{formatINR(inv.latest_current_value ?? 0)}
                       </td>
                       <td className="px-4 py-3 text-right font-mono text-gray-500">
-                        ₹{formatINR(inv.latest_total_invested)}
+                        ₹{formatINR(inv.latest_total_invested ?? 0)}
                       </td>
                       <td className="px-4 py-3 text-right">
                         <CurrencyDisplay
-                          amount={inv.unrealized_gain}
+                          amount={inv.unrealized_gain ?? 0}
                           showSign
                           className="text-sm"
                         />
                         <span className={cn(
                           "block text-xs",
-                          inv.absolute_return_pct >= 0 ? "text-green-600" : "text-red-600",
+                          (inv.absolute_return_pct ?? 0) >= 0 ? "text-green-600" : "text-red-600",
                         )}>
-                          {inv.absolute_return_pct >= 0 ? "+" : ""}
-                          {inv.absolute_return_pct.toFixed(2)}%
+                          {(inv.absolute_return_pct ?? 0) >= 0 ? "+" : ""}
+                          {(inv.absolute_return_pct ?? 0).toFixed(2)}%
                         </span>
                       </td>
                       <td className="px-4 py-3 text-right text-gray-600">
                         {inv.expected_cagr}%
                       </td>
                       <td className="px-4 py-3 text-xs text-gray-500 max-w-[200px] truncate">
-                        {inv.linked_goals.map((g) => g.goal_name).join(", ") || "—"}
+                        {inv.goal_name || "—"}
                       </td>
                     </tr>
                   ))}
